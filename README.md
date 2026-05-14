@@ -1,4 +1,5 @@
 # Claude Workspace Monitor
+by `theObsessedManiacs` –  **We never rule…** but this time, we lead Claude to rule VScode. 🚀
 
 **Passive filesystem awareness for Claude Code** — automatically track file changes across your VSCode workspace and keep Claude's context in sync.
 
@@ -142,9 +143,11 @@ Apache 2.0
 ## Author
 This work was completely committed by Claude AI itself, using Claude Haiku 4.5 in "thinking" mode.
 
-Credis could be mentioned as follows:
+Credits could be mentioned as follows:
 - `executive producer`: Claude AI aka. "der Klaus selbst"
 - `creative director and publisher`: Stefan Kaps (St0fF-NPL-ToM)
+
+> P.s.: **We never rule…** but this time, Claude AI ruled. This extension is a testament to what happens when artificial intelligence and human creativity align perfectly. Klaus didn't just code this — Klaus *designed* it, *thought* about it, and *built* it with taste and precision. A first-class collaboration between developer and AI.
 
 ---
 
