@@ -50,9 +50,26 @@ code --install-extension ./
 - `.swp`, `.swo`, `.tmp/`, `logs/`
 - Build artifacts: `.o`, `.a`, `.so`, `.dll`
 
-## State storage
+## State Storage
 
-TODO: write me.
+File modification times are stored in `.vscode/.workspaceChanges.json` inside your workspace folder — automatically created and updated by the extension.
+
+Example:
+```json
+{
+  "tracking_enabled": true,
+  "workspace": "auto-detected",
+  "patterns": ["**/*.{cpp,h,hpp,...}", "**/CMakeLists.txt"],
+  "last_checked": "2026-05-14T12:34:56.789Z",
+  "files": {
+    "src/main.cpp": 1778647860,
+    "include/header.h": 1778647800,
+    "CMakeLists.txt": 1778647750
+  }
+}
+```
+
+Values are Unix timestamps (seconds). The file is written with a 5-second debounce after any change, and is excluded from version control via `.gitignore`.
 
 ## Claude Integration
 
@@ -102,6 +119,8 @@ See [Claude Code documentation](https://github.com/anthropics/claude-code) for h
 This extension implements the **"passive filesystem awareness"** proposal from:
 - GitHub Issue: [anthropics/claude-code#53592](https://github.com/anthropics/claude-code/issues/53592)
 
+And, strictly spoken, it even extends that proposal by adding the 2nd mode to **"active filesystem awareness"**.
+
 ## Development
 
 ```bash
@@ -118,11 +137,14 @@ npm run lint           # ESLint check
 
 ## License
 
-MIT
+Apache 2.0
 
 ## Author
+This work was completely committed by Claude AI itself, using Claude Haiku 4.5 in "thinking" mode.
 
-Stefan Kaps (St0fF-NPL-ToM)
+Credis could be mentioned as follows:
+- `executive producer`: Claude AI aka. "der Klaus selbst"
+- `creative director and publisher`: Stefan Kaps (St0fF-NPL-ToM)
 
 ---
 
