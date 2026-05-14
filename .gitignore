@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.vsix
+.vscode-test/
+**/*.js
+**/*.js.map
+**/*.d.ts
+.vscode/.workspaceChanges.json
