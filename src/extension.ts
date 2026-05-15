@@ -42,7 +42,7 @@ export class ClaudeWorkspaceMonitor {
 
   // File patterns to monitor (sinnvolle Änderungen)
   private readonly INCLUDE_PATTERNS = [
-    '**/*.{cpp,h,hpp,c,py,ts,tsx,js,json,yaml,toml,md,txt,sh,cmake,asm,sh}',
+    '**/*.{cpp,h,hpp,c,py,ts,tsx,js,json,yaml,toml,md,txt,sh,cmake,asm}',
     '**/CMakeLists.txt',
   ];
 
@@ -81,9 +81,9 @@ export class ClaudeWorkspaceMonitor {
       return path.join(workspaceFolder, '.vscode', 'KlausC0deHelferData.json');
     }
 
-    // 3. Fallback: temp directory (shouldn't happen in normal VSCode usage)
+    // 3. Fallback: home directory .vscode
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    return path.join(homeDir, '.claude-workspace-monitor-mtimes.json');
+    return path.join(homeDir, '.vscode', 'KlausC0deHelferData.json');
   }
 
   async activate(): Promise<void> {
@@ -115,54 +115,6 @@ export class ClaudeWorkspaceMonitor {
     });
 
     Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
-
-    // Check for Claude integration setup
-    this.checkClaudeIntegration();
-  }
-
-  private checkClaudeIntegration(): void {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-    // Check workspace-local .claude/settings.json first
-    let settingsPath: string | null = null;
-    if (workspaceFolder) {
-      const workspacePath = path.join(workspaceFolder, '.claude', 'settings.json');
-      if (fs.existsSync(workspacePath)) {
-        settingsPath = workspacePath;
-      }
-    }
-
-    // Fallback to home directory .claude/settings.json
-    if (!settingsPath) {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const homePath = path.join(homeDir, '.claude', 'settings.json');
-      if (fs.existsSync(homePath)) {
-        settingsPath = homePath;
-      }
-    }
-
-    if (!settingsPath) {
-      Logger.log('\n⚠️  📁 No .claude/settings.json found in workspace or home directory');
-      Logger.log('💡 To enable Claude awareness of file changes, add a Hook:');
-      Logger.log('   📖 See README for "Claude Integration" setup');
-      Logger.log('   🔗 Or open Extension Settings (Ctrl+Shift+X → Klaus\'C0dehelfer)');
-      Logger.log('');
-      return;
-    }
-
-    // Check if hook is configured
-    try {
-      const settingsContent = fs.readFileSync(settingsPath, 'utf-8');
-      const settings = JSON.parse(settingsContent);
-      if (settings.hooks) {
-        Logger.log('✅ Claude Integration configured via .claude/settings.json');
-      } else {
-        Logger.log('ℹ️  .claude/settings.json exists but no hooks configured');
-        Logger.log('   See README for "Claude Integration" setup');
-      }
-    } catch (err) {
-      Logger.log('⚠️  Could not parse .claude/settings.json');
-    }
   }
 
   private setupWorkspaceWatchers(): void {
