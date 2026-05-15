@@ -13,18 +13,22 @@ interface WorkspaceState {
 }
 
 class Logger {
-  private static channel: vscode.OutputChannel;
+  private static channel: vscode.LogOutputChannel;
 
   static init(): void {
-    Logger.channel = vscode.window.createOutputChannel("Klaus'C0dehelfer");
+    Logger.channel = vscode.window.createOutputChannel("Klaus'C0dehelfer", { log: true });
   }
 
   static log(msg: string): void {
-    Logger.channel.appendLine(msg);
+    Logger.channel.info(msg);
+  }
+
+  static debug(msg: string): void {
+    Logger.channel.debug(msg);
   }
 
   static error(msg: string): void {
-    Logger.channel.appendLine(`[ERROR] ${msg}`);
+    Logger.channel.error(msg);
   }
 
   static dispose(): void {
@@ -216,7 +220,7 @@ export class ClaudeWorkspaceMonitor {
       }
 
       fs.writeFileSync(this.mtimesFile, JSON.stringify(data, null, 2));
-      Logger.log(`💾 State saved to ${this.mtimesFile}`);
+      Logger.debug(`💾 State saved to ${this.mtimesFile}`);
     } catch (err) {
       Logger.error(`Failed to save state: ${err}`);
     }
