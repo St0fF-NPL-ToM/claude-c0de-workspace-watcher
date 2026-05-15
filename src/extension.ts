@@ -4,7 +4,27 @@ import * as path from 'path';
 
 interface WorkspaceState {
   lastChecked: string;
-  files: { [key: string]: number };
+  files: string[];
+}
+
+class Logger {
+  private static channel: vscode.OutputChannel;
+
+  static init(): void {
+    Logger.channel = vscode.window.createOutputChannel("Klaus'C0dehelfer");
+  }
+
+  static log(msg: string): void {
+    Logger.channel.appendLine(msg);
+  }
+
+  static error(msg: string): void {
+    Logger.channel.appendLine(`[ERROR] ${msg}`);
+  }
+
+  static dispose(): void {
+    Logger.channel.dispose();
+  }
 }
 
 export class ClaudeWorkspaceMonitor {
@@ -12,7 +32,7 @@ export class ClaudeWorkspaceMonitor {
   private fileWatchers: vscode.FileSystemWatcher[] = [];
   private state: WorkspaceState = {
     lastChecked: new Date().toISOString(),
-    files: {},
+    files: [],
   };
 
   // File patterns to monitor (sinnvolle Änderungen)
@@ -50,10 +70,10 @@ export class ClaudeWorkspaceMonitor {
       return customPath.replace('${workspaceFolder}', vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '');
     }
 
-    // 2. Default: .vscode/.workspaceChanges.json in first workspace folder
+    // 2. Default: .vscode/KlausC0deHelferData.json in first workspace folder
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspaceFolder) {
-      return path.join(workspaceFolder, '.vscode', '.workspaceChanges.json');
+      return path.join(workspaceFolder, '.vscode', 'KlausC0deHelferData.json');
     }
 
     // 3. Fallback: temp directory (shouldn't happen in normal VSCode usage)
@@ -89,7 +109,7 @@ export class ClaudeWorkspaceMonitor {
       });
     });
 
-    console.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
+    Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
 
     // Check for Claude integration setup
     this.checkClaudeIntegration();
@@ -117,11 +137,11 @@ export class ClaudeWorkspaceMonitor {
     }
 
     if (!settingsPath) {
-      console.log('\n⚠️  📁 No .claude/settings.json found in workspace or home directory');
-      console.log('💡 To enable Claude awareness of file changes, add a Hook:');
-      console.log('   📖 See README for "Claude Integration" setup');
-      console.log('   🔗 Or open Extension Settings (Ctrl+Shift+X → Klaus\'C0dehelfer)');
-      console.log('');
+      Logger.log('\n⚠️  📁 No .claude/settings.json found in workspace or home directory');
+      Logger.log('💡 To enable Claude awareness of file changes, add a Hook:');
+      Logger.log('   📖 See README for "Claude Integration" setup');
+      Logger.log('   🔗 Or open Extension Settings (Ctrl+Shift+X → Klaus\'C0dehelfer)');
+      Logger.log('');
       return;
     }
 
@@ -130,13 +150,13 @@ export class ClaudeWorkspaceMonitor {
       const settingsContent = fs.readFileSync(settingsPath, 'utf-8');
       const settings = JSON.parse(settingsContent);
       if (settings.hooks) {
-        console.log('✅ Claude Integration configured via .claude/settings.json');
+        Logger.log('✅ Claude Integration configured via .claude/settings.json');
       } else {
-        console.log('ℹ️  .claude/settings.json exists but no hooks configured');
-        console.log('   See README for "Claude Integration" setup');
+        Logger.log('ℹ️  .claude/settings.json exists but no hooks configured');
+        Logger.log('   See README for "Claude Integration" setup');
       }
     } catch (err) {
-      console.log('⚠️  Could not parse .claude/settings.json');
+      Logger.log('⚠️  Could not parse .claude/settings.json');
     }
   }
 
@@ -167,7 +187,7 @@ export class ClaudeWorkspaceMonitor {
       });
     });
 
-    console.log(
+    Logger.log(
       `🔍 Workspace watchers set up for ${vscode.workspace.workspaceFolders?.length || 0} folders`
     );
   }
@@ -180,12 +200,11 @@ export class ClaudeWorkspaceMonitor {
       return;
     }
 
-    const mtime = this.getFileMtime(filePath);
     const relativePath = this.getRelativePath(filePath);
 
-    if (mtime !== null) {
-      this.state.files[relativePath] = mtime;
-      console.log(`✏️  [${new Date().toISOString()}] ${type}: ${relativePath}`);
+    if (!this.state.files.includes(relativePath)) {
+      this.state.files.push(relativePath);
+      Logger.log(`✏️  [${new Date().toISOString()}] ${type}: ${relativePath}`);
     }
 
     this.saveStateDebounced();
@@ -233,11 +252,11 @@ export class ClaudeWorkspaceMonitor {
         const parsed = JSON.parse(data);
         this.state = {
           lastChecked: parsed.last_checked || new Date().toISOString(),
-          files: parsed.files || {},
+          files: parsed.files || [],
         };
       }
     } catch (err) {
-      console.error('Failed to load state:', err);
+      Logger.error(`Failed to load state: ${err}`);
     }
   }
 
@@ -268,8 +287,9 @@ export class ClaudeWorkspaceMonitor {
       }
 
       fs.writeFileSync(this.mtimesFile, JSON.stringify(data, null, 2));
+      Logger.log(`💾 State saved to ${this.mtimesFile}`);
     } catch (err) {
-      console.error('Failed to save state:', err);
+      Logger.error(`Failed to save state: ${err}`);
     }
   }
 
@@ -280,6 +300,49 @@ export class ClaudeWorkspaceMonitor {
     }
     this.saveState();
   }
+}
+
+async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Promise<void> {
+  // TODO: Global vs. Workspace detection via inspect() is "subject to discussion".
+  // affectsConfiguration(section, folder) returns true for BOTH global and workspace
+  // changes, so affectsConfiguration alone is insufficient for distinction.
+  const folders = vscode.workspace.workspaceFolders;
+  const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
+  const insp = config.inspect<string>('awarenessMode');
+
+  let isGlobal = true;
+
+  if (folders && folders.length > 0) {
+    let primaryFound = false;
+    for (const folder of folders) {
+      if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode', folder)) {
+        if (folder === folders[0]) {
+          primaryFound = true;
+          isGlobal = (insp?.workspaceValue === undefined);
+        } else {
+          vscode.window.showWarningMessage(
+            "Klaus'C0dehelfer: Subfolder-Konfiguration wird nicht unterstützt."
+          );
+          return;
+        }
+        break;
+      }
+    }
+    if (!primaryFound) {
+      isGlobal = true;
+    }
+  }
+
+  const mode = isGlobal
+    ? (insp?.globalValue ?? 'none')
+    : (insp?.workspaceValue ?? 'none');
+
+  if (mode === 'realTime') {
+    vscode.window.showInformationMessage("Real-Time mode: coming soon.");
+    return;
+  }
+
+  await handleAwarenessModeSetting(mode);
 }
 
 async function handleAwarenessModeSetting(mode: string): Promise<void> {
@@ -336,6 +399,7 @@ async function handleAwarenessModeSetting(mode: string): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  Logger.init();
   const monitor = new ClaudeWorkspaceMonitor();
   monitor.activate();
 
@@ -352,12 +416,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode')) {
-        const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
-        const mode = config.get<string>('awarenessMode', 'none');
-        handleAwarenessModeSetting(mode);
+        handleAwarenessChange(event);
       }
     })
   );
 }
 
-export function deactivate() {}
+export function deactivate() {
+  Logger.dispose();
+}
