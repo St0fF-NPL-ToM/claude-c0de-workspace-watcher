@@ -89,6 +89,8 @@ export class ClaudeWorkspaceMonitor {
         Logger.debug(`🔄 stateFileName changed: ${oldPath} → ${this.mtimesFile}`);
       } else if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode')) {
         handleAwarenessChange(event);
+        const isActive = vscode.workspace.getConfiguration('claude-workspace-monitor').get('awarenessMode') !== 'none';
+        this.setupWorkspaceWatchers(isActive);
       }
     });
     // Registriere Callback → workspace-Wechsel
@@ -108,9 +110,12 @@ export class ClaudeWorkspaceMonitor {
   private initializeWorkspace(): void {
     if (vscode.workspace.workspaceFolders?.length) {
       this.loadState();
-      this.setupWorkspaceWatchers();
 
       const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
+      const isActive = config.get('awarenessMode') !== 'none';
+
+      this.setupWorkspaceWatchers(isActive);
+
       Logger.debug(`📋 Settings: awarenessMode=${config.get('awarenessMode')}`);
       Logger.debug(`📋 Settings: stateFileName=${config.get('stateFileName') || 'KlausC0deHelferData'}`);
       Logger.debug(`📋 State file: ${this.mtimesFile}`);
@@ -118,7 +123,6 @@ export class ClaudeWorkspaceMonitor {
       Logger.debug(`📋 Hook path (global): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_GLOBAL) || '(not set)'}`);
       Logger.debug(`📋 Hook path (workspace): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_WORKSPACE) || '(not set)'}`);
 
-      const isActive = config.get('awarenessMode') !== 'none';
       if (isActive) {
         Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
       } else {
@@ -130,30 +134,34 @@ export class ClaudeWorkspaceMonitor {
     }
   }
 
-  private setupWorkspaceWatchers(): void {
+  private setupWorkspaceWatchers(enabled: boolean): void {
     this.fileWatchers.forEach((w) => w.dispose());
     this.fileWatchers = [];
 
-    vscode.workspace.workspaceFolders?.forEach((folder) => {
-      this.INCLUDE_PATTERNS.forEach((pattern) => {
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(folder, pattern),
-          true,
-          false,
-          false
-        );
+    if (enabled) {
+      vscode.workspace.workspaceFolders?.forEach((folder) => {
+        this.INCLUDE_PATTERNS.forEach((pattern) => {
+          const watcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(folder, pattern),
+            true,
+            false,
+            false
+          );
 
-        watcher.onDidChange((uri) =>
-          this.trackFileChange(uri.fsPath)
-        );
+          watcher.onDidChange((uri) =>
+            this.trackFileChange(uri.fsPath)
+          );
 
-        this.fileWatchers.push(watcher);
+          this.fileWatchers.push(watcher);
+        });
       });
-    });
 
-    Logger.debug(
-      `🔍 Workspace watchers set up for ${vscode.workspace.workspaceFolders?.length || 0} folders`
-    );
+      Logger.debug(
+        `🔍 Workspace watchers set up for ${vscode.workspace.workspaceFolders?.length || 0} folders`
+      );
+    } else {
+      Logger.debug('🔇 Watchers disabled');
+    }
   }
 
   private trackFileChange(filePath: string): void {
