@@ -90,7 +90,7 @@ export class ClaudeWorkspaceMonitor {
       const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
       const isActive = config.get('awarenessMode') !== 'none';
 
-      this.setupWorkspaceWatchers(isActive);
+      this.setupWorkspaceWatchers( isActive );
 
       Logger.debug(`📋 Settings: awarenessMode=${config.get('awarenessMode')}`);
       Logger.debug(`📋 Settings: stateFileName=${config.get('stateFileName') || 'KlausC0deHelferData'}`);
@@ -177,15 +177,6 @@ export class ClaudeWorkspaceMonitor {
       .replace(/\?/g, '[^/]')
       .replace(/\*\*/g, '.*');
     return new RegExp(`(^|/)${escaped}($|/)`);
-  }
-
-  private getFileMtime(filePath: string): number | null {
-    try {
-      const stats = fs.statSync(filePath);
-      return Math.floor(stats.mtimeMs / 1000);
-    } catch {
-      return null;
-    }
   }
 
   private getRelativePath(filePath: string): string {
@@ -395,14 +386,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('claude-workspace-monitor.openSettings', () => {
       vscode.commands.executeCommand('workbench.action.openSettings', 'claude-workspace-monitor');
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode')) {
-        handleAwarenessChange(event);
-      }
     })
   );
 }
