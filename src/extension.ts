@@ -2,6 +2,11 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+let extensionContext: vscode.ExtensionContext;
+
+const GLOBAL_STATE_KEY_GLOBAL = 'claudeHook.globalSettingsPath';
+const GLOBAL_STATE_KEY_WORKSPACE = 'claudeHook.workspaceSettingsPath';
+
 interface WorkspaceState {
   lastChecked: string;
   files: string[];
@@ -342,11 +347,46 @@ async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Pr
     return;
   }
 
-  await handleAwarenessModeSetting(mode);
+  await handleAwarenessModeSetting(mode, isGlobal);
 }
 
-async function handleAwarenessModeSetting(mode: string): Promise<void> {
+async function removeKlausHooks(isGlobal: boolean): Promise<void> {
+  const stateKey = isGlobal ? GLOBAL_STATE_KEY_GLOBAL : GLOBAL_STATE_KEY_WORKSPACE;
+  const settingsPath = extensionContext.globalState.get<string>(stateKey);
+
+  if (!settingsPath || !fs.existsSync(settingsPath)) {
+    Logger.log('ℹ️  No hook configured for this scope — nothing to remove.');
+    return;
+  }
+
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    delete settings.hooks;
+
+    if (Object.keys(settings).length === 0) {
+      fs.unlinkSync(settingsPath);
+      Logger.log(`🗑️  Deleted empty settings file: ${settingsPath}`);
+    } else {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      Logger.log(`🗑️  Hook removed from ${settingsPath}`);
+    }
+  } catch (err) {
+    Logger.error(`Cleanup failed for ${settingsPath}: ${err}`);
+    return;
+  }
+
+  extensionContext.globalState.update(stateKey, undefined);
+  vscode.window.showInformationMessage("Klaus'C0dehelfer: Hook-Konfiguration entfernt.");
+}
+
+async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Promise<void> {
   if (mode === 'none') {
+    await removeKlausHooks(isGlobal);
+    return;
+  }
+
+  if (mode === 'realTime') {
+    vscode.window.showInformationMessage("Real-Time mode: coming soon.");
     return;
   }
 
@@ -361,44 +401,50 @@ async function handleAwarenessModeSetting(mode: string): Promise<void> {
     'Select .claude Folder'
   );
 
-  if (selection === 'Select .claude Folder') {
-    const folders = await vscode.window.showOpenDialog({
-      canSelectFiles: false,
-      canSelectFolders: true,
-      canSelectMany: false,
-      title: 'Select .claude folder',
-    });
+  if (selection !== 'Select .claude Folder') {
+    return;
+  }
 
-    if (folders && folders.length > 0) {
-      const claudeFolder = folders[0].fsPath;
-      const settingsPath = path.join(claudeFolder, 'settings.json');
+  const folders = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    title: 'Select .claude folder',
+  });
 
-      try {
-        // Read existing settings or start with empty object
-        let settings: any = {};
-        if (fs.existsSync(settingsPath)) {
-          const content = fs.readFileSync(settingsPath, 'utf-8');
-          settings = JSON.parse(content);
-        }
+  if (!folders || folders.length === 0) {
+    return;
+  }
 
-        // Add or update hooks
-        const hook = mode === 'onDemand'
-          ? { beforeAnswer: 'check .vscode/.workspaceChanges.json for updates' }
-          : { onChange: '.vscode/.workspaceChanges.json', action: 'notify' };
+  const claudeFolder = folders[0].fsPath;
+  const settingsPath = path.join(claudeFolder, 'settings.json');
 
-        settings.hooks = hook;
-
-        // Write back
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        vscode.window.showInformationMessage('✅ Claude integration configured!');
-      } catch (err) {
-        vscode.window.showErrorMessage(`Failed to write settings: ${err}`);
-      }
+  try {
+    let settings: any = {};
+    if (fs.existsSync(settingsPath)) {
+      const content = fs.readFileSync(settingsPath, 'utf-8');
+      settings = JSON.parse(content);
     }
+
+    // TODO: Hook-Inhalt wird in SPEC.md-Phase definiert
+    settings.hooks = { UserPromptSubmit: `node ${path.join(__dirname, 'hook-handler.js')}` };
+
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+
+    // Pfad scope-getrennt speichern
+    const stateKey = isGlobal ? GLOBAL_STATE_KEY_GLOBAL : GLOBAL_STATE_KEY_WORKSPACE;
+    extensionContext.globalState.update(stateKey, settingsPath);
+
+    Logger.log(`✅ Hook written to ${settingsPath}`);
+    vscode.window.showInformationMessage('✅ Klaus integration configured!');
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to write hook: ${err}`);
   }
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
   Logger.init();
   const monitor = new ClaudeWorkspaceMonitor();
   monitor.activate();
