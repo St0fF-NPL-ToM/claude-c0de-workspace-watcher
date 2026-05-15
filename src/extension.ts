@@ -8,7 +8,7 @@ const GLOBAL_STATE_KEY_GLOBAL = 'claudeHook.globalSettingsPath';
 const GLOBAL_STATE_KEY_WORKSPACE = 'claudeHook.workspaceSettingsPath';
 
 interface WorkspaceState {
-  lastChecked: string;
+  lastClaude: string;
   files: string[];
 }
 
@@ -37,10 +37,10 @@ class Logger {
 }
 
 export class ClaudeWorkspaceMonitor {
-  private mtimesFile: string;
+  private mtimesFile: string = '';
   private fileWatchers: vscode.FileSystemWatcher[] = [];
   private state: WorkspaceState = {
-    lastChecked: new Date().toISOString(),
+    lastClaude: new Date().toISOString(),
     files: [],
   };
 
@@ -67,15 +67,11 @@ export class ClaudeWorkspaceMonitor {
     '**/*.dll',
   ];
 
-  constructor() {
-    this.mtimesFile = '';
-  }
-
   private getMtimesPath(): string {
     const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
     const stem = config.get<string>('stateFileName') || 'KlausC0deHelferData';
     const filename = `${stem}.json`;
-    const result = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, '.vscode', filename);
+    const result = path.join('.vscode', filename);
     Logger.debug(`🗂️  getMtimesPath: ${stem} → ${result}`);
     return result;
   }
@@ -84,35 +80,53 @@ export class ClaudeWorkspaceMonitor {
     Logger.debug(`🚀 activate() start`);
 
     this.mtimesFile = this.getMtimesPath();
-    this.loadState();
-    this.setupWorkspaceWatchers();
+
+    // Registriere Callback → Handlung bei Config-Änderungen
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('claude-workspace-monitor.stateFileName')) {
+        const oldPath = this.mtimesFile;
+        this.mtimesFile = this.getMtimesPath();
+        Logger.debug(`🔄 stateFileName changed: ${oldPath} → ${this.mtimesFile}`);
+      } else if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode')) {
+        handleAwarenessChange(event);
+      }
+    });
+    // Registriere Callback → workspace-Wechsel
+    vscode.workspace.onDidChangeWorkspaceFolders((event) => {
+      Logger.debug(`📁 Workspace folders changed`);
+      this.initializeWorkspace();
+    });
 
     // Register change detection on file save
     vscode.workspace.onDidSaveTextDocument((doc) => {
       this.trackFileChange(doc.uri.fsPath);
     });
 
-    const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
-    Logger.debug(`📋 Settings: awarenessMode=${config.get('awarenessMode')}`);
-    Logger.debug(`📋 Settings: stateFileName=${config.get('stateFileName') || 'KlausC0deHelferData'}`);
-    Logger.debug(`📋 State file: ${this.mtimesFile}`);
-    Logger.debug(`📋 Workspace folders: ${vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath).join(', ')}`);
-    Logger.debug(`📋 Hook path (global): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_GLOBAL) || '(not set)'}`);
-    Logger.debug(`📋 Hook path (workspace): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_WORKSPACE) || '(not set)'}`);
+    this.initializeWorkspace();
+  }
 
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('claude-workspace-monitor.stateFileName')) {
-        const oldPath = this.mtimesFile;
-        this.mtimesFile = this.getMtimesPath();
-        Logger.debug(`🔄 stateFileName changed: ${oldPath} → ${this.mtimesFile}`);
+  private initializeWorkspace(): void {
+    if (vscode.workspace.workspaceFolders?.length) {
+      this.loadState();
+      this.setupWorkspaceWatchers();
+
+      const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
+      Logger.debug(`📋 Settings: awarenessMode=${config.get('awarenessMode')}`);
+      Logger.debug(`📋 Settings: stateFileName=${config.get('stateFileName') || 'KlausC0deHelferData'}`);
+      Logger.debug(`📋 State file: ${this.mtimesFile}`);
+      Logger.debug(`📋 Workspace folders: ${vscode.workspace.workspaceFolders.map(f => f.uri.fsPath).join(', ')}`);
+      Logger.debug(`📋 Hook path (global): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_GLOBAL) || '(not set)'}`);
+      Logger.debug(`📋 Hook path (workspace): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_WORKSPACE) || '(not set)'}`);
+
+      const isActive = config.get('awarenessMode') !== 'none';
+      if (isActive) {
+        Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
+      } else {
+        Logger.log('😴 Klaus\'C0dehelfer ist latschig! (…claude workspace monitor actively asleep…)');
       }
-    });
-
-    const isActive = config.get('awarenessMode') !== 'none';
-    if (isActive) {
-      Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
     } else {
-      Logger.log('😴 Klaus\'C0dehelfer ist latschig! (…claude workspace monitor actively asleep…)');
+      Logger.log('ℹ️  Kein Workspace offen — Klaus\'C0dehelfer inaktiv.');
+      this.deactivate();
     }
   }
 
@@ -197,16 +211,17 @@ export class ClaudeWorkspaceMonitor {
 
   private loadState(): void {
     try {
-      if (fs.existsSync(this.mtimesFile)) {
-        const data = fs.readFileSync(this.mtimesFile, 'utf-8');
+      const absolutePath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, this.mtimesFile);
+      if (fs.existsSync(absolutePath)) {
+        const data = fs.readFileSync(absolutePath, 'utf-8');
         const parsed = JSON.parse(data);
         this.state = {
-          lastChecked: parsed.last_checked || new Date().toISOString(),
+          lastClaude: parsed.lastClaude || new Date().toISOString(),
           files: parsed.files || [],
         };
-        Logger.debug(`📂 loadState: loaded ${this.state.files.length} files, last_checked=${this.state.lastChecked}`);
+        Logger.debug(`📂 loadState: loaded ${this.state.files.length} files, lastClaude=${this.state.lastClaude}`);
       } else {
-        Logger.debug(`📂 loadState: file not found at ${this.mtimesFile}`);
+        Logger.debug(`📂 loadState: file not found at ${absolutePath}`);
       }
     } catch (err) {
       Logger.error(`Failed to load state: ${err}`);
@@ -226,21 +241,15 @@ export class ClaudeWorkspaceMonitor {
 
   private saveState(): void {
     try {
-      const data = {
-        tracking_enabled: true,
-        workspace: 'auto-detected',
-        patterns: this.INCLUDE_PATTERNS,
-        last_checked: new Date().toISOString(),
-        files: this.state.files,
-      };
-
-      const dir = path.dirname(this.mtimesFile);
+      const absolutePath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, this.mtimesFile);
+      const dir = path.dirname(absolutePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
 
-      fs.writeFileSync(this.mtimesFile, JSON.stringify(data, null, 2));
-      Logger.debug(`💾 State saved to ${this.mtimesFile}`);
+      this.state.lastClaude = new Date().toISOString();
+      fs.writeFileSync(absolutePath, JSON.stringify(this.state, null, 2));
+      Logger.debug(`💾 State saved to ${absolutePath}`);
     } catch (err) {
       Logger.error(`Failed to save state: ${err}`);
     }
