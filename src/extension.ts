@@ -92,26 +92,7 @@ export class ClaudeWorkspaceMonitor {
 
     // Register change detection on file save
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      this.trackFileChange(doc.uri.fsPath, 'modify');
-    });
-
-    // Handle file creation/deletion
-    vscode.workspace.onDidCreateFiles((event) => {
-      event.files.forEach((file) => {
-        this.trackFileChange(file.fsPath, 'create');
-      });
-    });
-
-    vscode.workspace.onDidDeleteFiles((event) => {
-      event.files.forEach((file) => {
-        this.trackFileChange(file.fsPath, 'delete');
-      });
-    });
-
-    vscode.workspace.onDidRenameFiles((event) => {
-      event.files.forEach((file) => {
-        this.trackFileChange(file.newUri.fsPath, 'rename');
-      });
+      this.trackFileChange(doc.uri.fsPath);
     });
 
     Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
@@ -130,14 +111,8 @@ export class ClaudeWorkspaceMonitor {
           false
         );
 
-        watcher.onDidCreate((uri) =>
-          this.trackFileChange(uri.fsPath, 'create')
-        );
         watcher.onDidChange((uri) =>
-          this.trackFileChange(uri.fsPath, 'modify')
-        );
-        watcher.onDidDelete((uri) =>
-          this.trackFileChange(uri.fsPath, 'delete')
+          this.trackFileChange(uri.fsPath)
         );
 
         this.fileWatchers.push(watcher);
@@ -149,10 +124,7 @@ export class ClaudeWorkspaceMonitor {
     );
   }
 
-  private trackFileChange(
-    filePath: string,
-    type: 'create' | 'modify' | 'delete' | 'rename'
-  ): void {
+  private trackFileChange(filePath: string): void {
     if (this.isExcluded(filePath)) {
       return;
     }
@@ -161,7 +133,7 @@ export class ClaudeWorkspaceMonitor {
 
     if (!this.state.files.includes(relativePath)) {
       this.state.files.push(relativePath);
-      Logger.log(`✏️  [${new Date().toISOString()}] ${type}: ${relativePath}`);
+      Logger.log(`✏️  [${new Date().toISOString()}] ${relativePath}`);
     }
 
     this.saveStateDebounced();
