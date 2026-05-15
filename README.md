@@ -34,6 +34,7 @@ npm install
 npm run compile
 code --install-extension ./
 ```
+> TODO: andere Möglichkeiten offenbaren
 
 ## How It Works
 

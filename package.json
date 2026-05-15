@@ -71,10 +71,10 @@
           "description": "Claude coworking awareness mode. Select 'On-Demand' or 'Real-Time' to enable and configure hooks.",
           "scope": "resource"
         },
-        "claude-workspace-monitor.mtimesPath": {
+        "claude-workspace-monitor.stateFileName": {
           "type": "string",
-          "default": "",
-          "description": "Custom path for file modification times. Leave empty to use workspace .vscode/.workspaceChanges.json. Supports ${workspaceFolder} variable.",
+          "default": "KlausC0deHelferData",
+          "description": "Filename stem for workspace state tracking (without .json extension). E.g., 'KlausC0deHelferData' stores as '.vscode/KlausC0deHelferData.json'. The .json extension is automatically appended.",
           "scope": "resource"
         }
       }

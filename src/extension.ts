@@ -68,29 +68,22 @@ export class ClaudeWorkspaceMonitor {
   ];
 
   constructor() {
-    this.mtimesFile = this.getMtimesPath();
+    this.mtimesFile = '';
   }
 
   private getMtimesPath(): string {
-    // 1. Check VSCode setting
     const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
-    const customPath = config.get<string>('mtimesPath');
-    if (customPath) {
-      return customPath.replace('${workspaceFolder}', vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '');
-    }
-
-    // 2. Default: .vscode/KlausC0deHelferData.json in first workspace folder
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (workspaceFolder) {
-      return path.join(workspaceFolder, '.vscode', 'KlausC0deHelferData.json');
-    }
-
-    // 3. Fallback: home directory .vscode
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    return path.join(homeDir, '.vscode', 'KlausC0deHelferData.json');
+    const stem = config.get<string>('stateFileName') || 'KlausC0deHelferData';
+    const filename = `${stem}.json`;
+    const result = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, '.vscode', filename);
+    Logger.debug(`🗂️  getMtimesPath: ${stem} → ${result}`);
+    return result;
   }
 
   async activate(): Promise<void> {
+    Logger.debug(`🚀 activate() start`);
+
+    this.mtimesFile = this.getMtimesPath();
     this.loadState();
     this.setupWorkspaceWatchers();
 
@@ -99,7 +92,28 @@ export class ClaudeWorkspaceMonitor {
       this.trackFileChange(doc.uri.fsPath);
     });
 
-    Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
+    const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
+    Logger.debug(`📋 Settings: awarenessMode=${config.get('awarenessMode')}`);
+    Logger.debug(`📋 Settings: stateFileName=${config.get('stateFileName') || 'KlausC0deHelferData'}`);
+    Logger.debug(`📋 State file: ${this.mtimesFile}`);
+    Logger.debug(`📋 Workspace folders: ${vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath).join(', ')}`);
+    Logger.debug(`📋 Hook path (global): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_GLOBAL) || '(not set)'}`);
+    Logger.debug(`📋 Hook path (workspace): ${extensionContext.globalState.get(GLOBAL_STATE_KEY_WORKSPACE) || '(not set)'}`);
+
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('claude-workspace-monitor.stateFileName')) {
+        const oldPath = this.mtimesFile;
+        this.mtimesFile = this.getMtimesPath();
+        Logger.debug(`🔄 stateFileName changed: ${oldPath} → ${this.mtimesFile}`);
+      }
+    });
+
+    const isActive = config.get('awarenessMode') !== 'none';
+    if (isActive) {
+      Logger.log('✅ Klaus\'C0dehelfer ist scharf! (…claude workspace monitor activated…)');
+    } else {
+      Logger.log('😴 Klaus\'C0dehelfer ist latschig! (…claude workspace monitor actively asleep…)');
+    }
   }
 
   private setupWorkspaceWatchers(): void {
@@ -110,7 +124,7 @@ export class ClaudeWorkspaceMonitor {
       this.INCLUDE_PATTERNS.forEach((pattern) => {
         const watcher = vscode.workspace.createFileSystemWatcher(
           new vscode.RelativePattern(folder, pattern),
-          false,
+          true,
           false,
           false
         );
@@ -123,13 +137,14 @@ export class ClaudeWorkspaceMonitor {
       });
     });
 
-    Logger.log(
+    Logger.debug(
       `🔍 Workspace watchers set up for ${vscode.workspace.workspaceFolders?.length || 0} folders`
     );
   }
 
   private trackFileChange(filePath: string): void {
     if (this.isExcluded(filePath)) {
+      Logger.debug(`🚫 Excluded: ${filePath}`);
       return;
     }
 
@@ -138,6 +153,8 @@ export class ClaudeWorkspaceMonitor {
     if (!this.state.files.includes(relativePath)) {
       this.state.files.push(relativePath);
       Logger.log(`✏️  [${new Date().toISOString()}] ${relativePath}`);
+    } else {
+      Logger.debug(`⏭️  Already tracked: ${relativePath}`);
     }
 
     this.saveStateDebounced();
@@ -187,6 +204,9 @@ export class ClaudeWorkspaceMonitor {
           lastChecked: parsed.last_checked || new Date().toISOString(),
           files: parsed.files || [],
         };
+        Logger.debug(`📂 loadState: loaded ${this.state.files.length} files, last_checked=${this.state.lastChecked}`);
+      } else {
+        Logger.debug(`📂 loadState: file not found at ${this.mtimesFile}`);
       }
     } catch (err) {
       Logger.error(`Failed to load state: ${err}`);
@@ -239,9 +259,13 @@ async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Pr
   // TODO: Global vs. Workspace detection via inspect() is "subject to discussion".
   // affectsConfiguration(section, folder) returns true for BOTH global and workspace
   // changes, so affectsConfiguration alone is insufficient for distinction.
+  Logger.debug(`⚙️  awarenessMode changed`);
+
   const folders = vscode.workspace.workspaceFolders;
   const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
   const insp = config.inspect<string>('awarenessMode');
+
+  Logger.debug(`⚙️  inspect: globalValue=${insp?.globalValue}, workspaceValue=${insp?.workspaceValue}`);
 
   let isGlobal = true;
 
@@ -264,6 +288,8 @@ async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Pr
     ? (insp?.globalValue ?? 'none')
     : (insp?.workspaceValue ?? 'none');
 
+  Logger.debug(`⚙️  isGlobal=${isGlobal}, mode=${mode}`);
+
   if (mode === 'realTime') {
     vscode.window.showInformationMessage("Real-Time mode: coming soon.");
     return;
@@ -275,6 +301,9 @@ async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Pr
 async function removeKlausHooks(isGlobal: boolean): Promise<void> {
   const stateKey = isGlobal ? GLOBAL_STATE_KEY_GLOBAL : GLOBAL_STATE_KEY_WORKSPACE;
   const settingsPath = extensionContext.globalState.get<string>(stateKey);
+
+  Logger.debug(`🗑️  removeKlausHooks: isGlobal=${isGlobal}, stateKey=${stateKey}`);
+  Logger.debug(`🗑️  Stored path: ${settingsPath || '(not set)'}`);
 
   if (!settingsPath || !fs.existsSync(settingsPath)) {
     Logger.log('ℹ️  No hook configured for this scope — nothing to remove.');
@@ -302,6 +331,8 @@ async function removeKlausHooks(isGlobal: boolean): Promise<void> {
 }
 
 async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Promise<void> {
+  Logger.debug(`🔧 handleAwarenessModeSetting: mode=${mode}, isGlobal=${isGlobal}`);
+
   if (mode === 'none') {
     await removeKlausHooks(isGlobal);
     return;
@@ -314,14 +345,20 @@ async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Prom
   //   return;
   // }
 
-  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-  if (!homeDir) {
-    vscode.window.showErrorMessage("Klaus'C0dehelfer: Could not determine home directory.");
-    return;
+  let settingsPath: string;
+
+  if (isGlobal) {
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    if (!homeDir) {
+      vscode.window.showErrorMessage("Klaus'C0dehelfer: Could not determine home directory.");
+      return;
+    }
+    settingsPath = path.join(homeDir, '.claude', 'settings.local.json');
+  } else {
+    settingsPath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, '.claude', 'settings.local.json');
   }
 
-  const claudeFolder = path.join(homeDir, '.claude');
-  const settingsPath = path.join(claudeFolder, 'settings.local.json');
+  Logger.debug(`🔧 Target settings file: ${settingsPath}`);
 
   try {
     let settings: any = {};
