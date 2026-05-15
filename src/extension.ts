@@ -55,7 +55,7 @@ export class ClaudeWorkspaceMonitor {
   }
 
   async activate(): Promise<void> {
-    Logger.debug(`🚀 activate() start`);
+    Logger.log(`🚀 Klaus'C0dehelfer startet…`);
 
     this.mtimesFile = this.getMtimesPath();
 
@@ -140,11 +140,11 @@ export class ClaudeWorkspaceMonitor {
         });
       });
 
-      Logger.debug(
-        `🔍 Workspace watchers set up for ${vscode.workspace.workspaceFolders?.length || 0} folders`
+      Logger.log(
+        `🔍 Klaus wartet auf Dateiänderungen… (…watching ${vscode.workspace.workspaceFolders?.length || 0} folders for file changes…)`
       );
     } else {
-      Logger.debug('🔇 Watchers disabled');
+      Logger.log('🔇 Pause konfiguriert…');
     }
   }
 
