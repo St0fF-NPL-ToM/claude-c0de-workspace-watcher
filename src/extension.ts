@@ -242,23 +242,17 @@ async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Pr
   let isGlobal = true;
 
   if (folders && folders.length > 0) {
-    let primaryFound = false;
     for (const folder of folders) {
       if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode', folder)) {
-        if (folder === folders[0]) {
-          primaryFound = true;
-          isGlobal = (insp?.workspaceValue === undefined);
-        } else {
+        if (folder === folders[0]) isGlobal = false;
+        else {
           vscode.window.showWarningMessage(
             "Klaus'C0dehelfer: Subfolder-Konfiguration wird nicht unterstützt."
           );
-          return;
+          return; // ICH HASSE PREMATURE RETURNS! Dennoch korrekt hier.
         }
         break;
       }
-    }
-    if (!primaryFound) {
-      isGlobal = true;
     }
   }
 
@@ -309,39 +303,22 @@ async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Prom
     return;
   }
 
-  if (mode === 'realTime') {
-    vscode.window.showInformationMessage("Real-Time mode: coming soon.");
+  /* dieser Code ist Quatsch, solange wir es schon in Z.263 abfangen. Dennoch: für später drinne lassen! */
+  // if (mode === 'realTime') {
+  //   vscode.window.showInformationMessage("Real-Time mode: coming soon.");
+  //   return;
+  // }
+
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  if (!homeDir) {
+    vscode.window.showErrorMessage("Klaus'C0dehelfer: Could not determine home directory.");
     return;
   }
 
-  const explanations: { [key: string]: string } = {
-    onDemand: 'On-Demand: Claude checks for file changes when responding to your prompts. Efficient, minimal tokens spent.',
-    realTime: 'Real-Time: Claude is notified instantly when you save files. Immediate awareness, but costs more tokens.',
-  };
-
-  const selection = await vscode.window.showInformationMessage(
-    explanations[mode] || '',
-    { modal: true, detail: 'Select the .claude folder to configure this integration.' },
-    'Select .claude Folder'
-  );
-
-  if (selection !== 'Select .claude Folder') {
-    return;
-  }
-
-  const folders = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    canSelectMany: false,
-    title: 'Select .claude folder',
-  });
-
-  if (!folders || folders.length === 0) {
-    return;
-  }
-
-  const claudeFolder = folders[0].fsPath;
-  const settingsPath = path.join(claudeFolder, 'settings.json');
+  const claudeFolder = path.join(homeDir, '.claude');
+  const settingsPath = isGlobal
+    ? path.join(claudeFolder, 'settings.json')
+    : path.join(claudeFolder, 'settings.local.json');
 
   try {
     let settings: any = {};
