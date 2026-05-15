@@ -2,7 +2,7 @@
   "name": "claude-c0de-workspace-watcher",
   "displayName": "Klaus'C0dehelfer",
   "description": "Passive filesystem awareness for Claude Code: tracks file changes and syncs with Claude's context",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "theObsessedManiacs",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
@@ -79,7 +79,9 @@
         },
         "claude-workspace-monitor.includePatterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [
             "**/*.{cpp,h,hpp,c,py,ts,tsx,js,json,yaml,toml,md,txt,sh,cmake,asm}",
             "**/CMakeLists.txt"
@@ -89,7 +91,9 @@
         },
         "claude-workspace-monitor.excludePatterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [
             "**/[.]*",
             "**/build/**",
