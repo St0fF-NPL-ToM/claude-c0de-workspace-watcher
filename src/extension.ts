@@ -303,7 +303,8 @@ async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Prom
     return;
   }
 
-  /* dieser Code ist Quatsch, solange wir es schon in Z.263 abfangen. Dennoch: für später drinne lassen! */
+  /* dieser Code ist Quatsch, solange wir es schon in handleAwarenessChange() abfangen.
+     Dennoch: für später drinne lassen! */
   // if (mode === 'realTime') {
   //   vscode.window.showInformationMessage("Real-Time mode: coming soon.");
   //   return;
@@ -316,9 +317,7 @@ async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Prom
   }
 
   const claudeFolder = path.join(homeDir, '.claude');
-  const settingsPath = isGlobal
-    ? path.join(claudeFolder, 'settings.json')
-    : path.join(claudeFolder, 'settings.local.json');
+  const settingsPath = path.join(claudeFolder, 'settings.local.json');
 
   try {
     let settings: any = {};
