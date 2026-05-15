@@ -44,28 +44,6 @@ export class ClaudeWorkspaceMonitor {
     files: [],
   };
 
-  // File patterns to monitor (sinnvolle Änderungen)
-  private readonly INCLUDE_PATTERNS = [
-    '**/*.{cpp,h,hpp,c,py,ts,tsx,js,json,yaml,toml,md,txt,sh,cmake,asm}',
-    '**/CMakeLists.txt',
-  ];
-
-  // Patterns to exclude (noise reduction)
-  private readonly EXCLUDE_PATTERNS = [
-    '**/.git/**',
-    '**/build/**',
-    '**/__pycache__/**',
-    '**/.vscode/**',
-    '**/node_modules/**',
-    '**/.swp',
-    '**/.swo',
-    '**/.tmp/**',
-    '**/logs/**',
-    '**/*.o',
-    '**/*.a',
-    '**/*.so',
-    '**/*.dll',
-  ];
 
   private getMtimesPath(): string {
     const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
@@ -89,6 +67,9 @@ export class ClaudeWorkspaceMonitor {
         Logger.debug(`🔄 stateFileName changed: ${oldPath} → ${this.mtimesFile}`);
       } else if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode')) {
         handleAwarenessChange(event);
+        const isActive = vscode.workspace.getConfiguration('claude-workspace-monitor').get('awarenessMode') !== 'none';
+        this.setupWorkspaceWatchers(isActive);
+      } else if (event.affectsConfiguration('claude-workspace-monitor.includePatterns')) {
         const isActive = vscode.workspace.getConfiguration('claude-workspace-monitor').get('awarenessMode') !== 'none';
         this.setupWorkspaceWatchers(isActive);
       }
@@ -139,8 +120,11 @@ export class ClaudeWorkspaceMonitor {
     this.fileWatchers = [];
 
     if (enabled) {
+      const patterns = vscode.workspace.getConfiguration('claude-workspace-monitor')
+        .get<string[]>('includePatterns', []);
+
       vscode.workspace.workspaceFolders?.forEach((folder) => {
-        this.INCLUDE_PATTERNS.forEach((pattern) => {
+        patterns.forEach((pattern) => {
           const watcher = vscode.workspace.createFileSystemWatcher(
             new vscode.RelativePattern(folder, pattern),
             true,
@@ -183,7 +167,9 @@ export class ClaudeWorkspaceMonitor {
   }
 
   private isExcluded(filePath: string): boolean {
-    return this.EXCLUDE_PATTERNS.some((pattern) => {
+    const excludePatterns = vscode.workspace.getConfiguration('claude-workspace-monitor')
+      .get<string[]>('excludePatterns', []);
+    return excludePatterns.some((pattern) => {
       const regex = this.globToRegex(pattern);
       return regex.test(filePath);
     });

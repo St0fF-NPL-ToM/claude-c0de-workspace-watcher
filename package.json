@@ -76,6 +76,37 @@
           "default": "KlausC0deHelferData",
           "description": "Filename stem for workspace state tracking (without .json extension). E.g., 'KlausC0deHelferData' stores as '.vscode/KlausC0deHelferData.json'. The .json extension is automatically appended.",
           "scope": "resource"
+        },
+        "claude-workspace-monitor.includePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "**/*.{cpp,h,hpp,c,py,ts,tsx,js,json,yaml,toml,md,txt,sh,cmake,asm}",
+            "**/CMakeLists.txt"
+          ],
+          "description": "Glob patterns for files to monitor.",
+          "scope": "resource"
+        },
+        "claude-workspace-monitor.excludePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "**/.git/**",
+            "**/build/**",
+            "**/__pycache__/**",
+            "**/.vscode/**",
+            "**/node_modules/**",
+            "**/.swp",
+            "**/.swo",
+            "**/.tmp/**",
+            "**/logs/**",
+            "**/*.o",
+            "**/*.a",
+            "**/*.so",
+            "**/*.dll"
+          ],
+          "description": "Glob patterns for files to exclude from monitoring.",
+          "scope": "resource"
         }
       }
     }
