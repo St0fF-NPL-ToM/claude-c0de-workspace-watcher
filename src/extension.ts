@@ -80,11 +80,6 @@ export class ClaudeWorkspaceMonitor {
       this.initializeWorkspace();
     });
 
-    // Register change detection on file save
-    vscode.workspace.onDidSaveTextDocument((doc) => {
-      this.trackFileChange(doc.uri.fsPath);
-    });
-
     this.initializeWorkspace();
   }
 
