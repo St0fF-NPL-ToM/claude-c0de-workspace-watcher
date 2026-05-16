@@ -61,9 +61,15 @@ export class ClaudeWorkspaceMonitor {
     const currentPath = extensionContext.extension.extensionPath;
     const lastKnownPath = extensionContext.globalState.get<string>('lastExtensionPath');
 
+    Logger.debug(`🔍 Extension path check: current=${currentPath.split('/').pop()}, last=${lastKnownPath?.split('/').pop() || '(none)'}`);
+
     if (lastKnownPath && currentPath !== lastKnownPath) {
-      Logger.log(`♻️  Upgrade detected: ${lastKnownPath.split('/').pop()} → ${currentPath.split('/').pop()}`);
+      Logger.log(`♻️  Upgrade detected!`);
+      Logger.log(`   Old: ${lastKnownPath}`);
+      Logger.log(`   New: ${currentPath}`);
       await this.handleUpgrade(lastKnownPath, currentPath);
+    } else if (!lastKnownPath) {
+      Logger.debug(`🆕 First run: storing extension path`);
     }
 
     extensionContext.globalState.update('lastExtensionPath', currentPath);
@@ -95,11 +101,11 @@ export class ClaudeWorkspaceMonitor {
   }
 
   private async handleUpgrade(oldPath: string, newPath: string): Promise<void> {
-    Logger.debug(`🔧 Handling upgrade: re-registering hooks with new path`);
+    Logger.log(`🔧 handleUpgrade: starting hook re-registration`);
 
     const folders = vscode.workspace.workspaceFolders;
     if (!folders?.length) {
-      Logger.debug(`📁 No workspace folders, skipping hook update`);
+      Logger.log(`ℹ️  No workspace folders, skipping hook update`);
       return;
     }
 
@@ -109,9 +115,14 @@ export class ClaudeWorkspaceMonitor {
     const isGlobal = !insp?.workspaceValue;
     const mode = isGlobal ? (insp?.globalValue ?? 'none') : (insp?.workspaceValue ?? 'none');
 
+    Logger.debug(`   awarenessMode: ${mode} (isGlobal: ${isGlobal})`);
+
     if (mode !== 'none') {
-      Logger.debug(`🔄 Re-registering hooks with new extension path`);
+      Logger.log(`🔄 Re-registering ${isGlobal ? 'global' : 'workspace'} hooks with new extension path`);
       await handleAwarenessModeSetting(mode, isGlobal);
+      Logger.log(`✅ Hooks re-registered successfully`);
+    } else {
+      Logger.debug(`   awarenessMode is 'none', no hooks to register`);
     }
   }
 
