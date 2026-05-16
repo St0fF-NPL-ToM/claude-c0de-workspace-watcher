@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.get\\('packages',{}\\).keys\\(\\)\\)[:30]\\)\")",
+      "Bash(git -C /home/st0ff/Quellen/Config/extensions/claude-workspace-monitor log '*)",
+      "Bash(npx vsce *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(find /home/st0ff '*)",
+      "Read(//home/st0ff/**)",
+      "Bash(grep -E '*)",
+      "Bash(chmod +x /home/st0ff/Quellen/Config/extensions/claude-workspace-monitor/.git/hooks/prepare-commit-msg)"
+    ]
+  }
+}

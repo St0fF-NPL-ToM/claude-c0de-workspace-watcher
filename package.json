@@ -2,7 +2,7 @@
   "name": "claude-c0de-workspace-watcher",
   "displayName": "Klaus'C0dehelfer",
   "description": "Passive filesystem awareness for Claude Code: tracks file changes and syncs with Claude's context",
-  "version": "0.4.0-i43",
+  "version": "0.4.0-i44",
   "publisher": "theObsessedManiacs",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
@@ -115,7 +115,7 @@
     "vscode:prepublish": "npm run bundle",
     "bundle": "npm run bundle:ext && npm run bundle:hook",
     "bundle:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --minify",
-    "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --minify",
+    "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --external:vscode --minify",
     "compile": "tsc --noEmit",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src"
