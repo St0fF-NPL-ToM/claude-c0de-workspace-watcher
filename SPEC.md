@@ -6,6 +6,24 @@ Unified diff-generation system for both On-Demand and Real-Time Claude awareness
 
 Single persistent state file: `.vscode/KlausC0deHelferData.json`
 
+## Current Status (2026-05-16)
+
+**✅ Working (Phase 1: File Listing)**
+- VSCode Extension monitors file changes via `FileSystemWatcher`
+- Hook Handler executes on `UserPromptSubmit` event (confirmed in testing)
+- File list is successfully injected as `additionalContext` to Claude Code
+- Hook runs within VSCode context (can access workspace filesystem)
+
+**Example Output (tested):**
+```json
+{
+  "additionalContext": "📝 Klaus'C0dehelfer detected file changes since last prompt:\n  • SESSION_2025-05-15.md\n  • COLLABORATION.md\n  • ROADMAP.md"
+}
+```
+
+**⏳ Next Phase: Unified Diffs**
+Current implementation lists changed files. Next phase replaces file list with actual `git diff`-style unified diffs via `diffToKlaus()` function. Architecture decision pending: whether hook can call extension functions directly via IPC, or extension must pre-generate diffs.
+
 ## Data Model
 
 ### Persistent State: `.vscode/KlausC0deHelferData.json`

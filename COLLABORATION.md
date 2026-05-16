@@ -351,6 +351,62 @@ Session 2 wasn't about adding features — it was about **removing lies**. The c
 
 ---
 
+---
+
+## Phase 8: The POC Success (2026-05-16 Evening)
+
+After cleanup and documentation, Stefan and Klaus tested the actual hook integration in a live VSCode environment.
+
+### Key Insight: The Runtime Context
+
+Stefan corrected a fundamental misunderstanding: "Der Hook läuft in ClaudeCode" — No. On Linux with only VSCode + anthropic.claude-code extension installed, the hook **runs within VSCode's context**, not in a separate Claude app. This opens up possibilities for direct VSCode API access.
+
+### The POC Test
+
+1. **Stefan configured awarenessMode** → Extension wrote hook config to `.claude/settings.local.json`
+2. **Hook schema was wrong** → Agents caught: `UserPromptSubmit: "string"` should be array per Claude Code schema
+3. **Hook-handler had a crash risk** → `import vscode` at module load crashed Node when vscode not available; removed
+4. **Tests confirmed**: Hook executed successfully, read state file, injected file changes to Claude Code
+
+**Proof (from Claude Code logs):**
+```
+[DEBUG] Hooks: Checking first line for async: {
+  "additionalContext": "📝 Klaus'C0dehelfer detected file changes since last prompt:\n  • SESSION_2025-05-15.md\n  • COLLABORATION.md\n  • ROADMAP.md\n  • package.json\n  • dist/extension.js\n  • dist/hook-handler.js"
+}
+```
+
+### Versioning Lesson
+
+Stefan explained the real problem with auto-versioning:
+- prepare-commit-msg (old): Version X → commit X+1 → confusion
+- post-commit (new): Commit X → version X+1 after commit → honest build numbers
+
+**New strategy:**
+- `i` (implementation), `a` (alpha), `b` (beta), `r` (release) indicate phase
+- Counter auto-increments per commit (like CI build numbers)
+- Manual bumps change Major/Minor/letter and reset counter to 0
+
+### Code Quality Deep Dive
+
+Three agents (Reuse, Quality, Efficiency) reviewed hook-handler.ts and extension.ts:
+
+**Issues fixed:**
+1. VSCode import crash risk ✓
+2. Wrong hook schema (string vs array) ✓
+3. `removeKlausHooks()` deleting all hooks instead of just UserPromptSubmit ✓
+4. TOCTOU pattern (existsSync + readFileSync) ✓
+5. POC debug noise removed ✓
+6. Weak typing (`any`) strengthened ✓
+
+### What This Unlocks
+
+The POC proves:
+- ✅ Hook-to-Claude communication works
+- ✅ File state synchronization is reliable
+- ✅ Next: Can we generate diffs? (requires decision: extension pre-generates, or hook calls extension?)
+
+---
+
 **Co-authored by:** Stefan Kaps (st0ff-NPL-ToM, aka "St0ffi") and Claude Haiku 4.5 (Klaus)
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2)
-**Status:** Actively collaborating, learning together, being honest about progress
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-16 Evening (Session 3)
+**Status:** Actively collaborating, learning together, being honest about progress. POC successful; ready for diff-generation phase.
