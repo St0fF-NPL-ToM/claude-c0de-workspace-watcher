@@ -301,7 +301,12 @@ async function removeKlausHooks(isGlobal: boolean): Promise<void> {
 
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    delete settings.hooks;
+    if (settings.hooks) {
+      delete settings.hooks.UserPromptSubmit;
+      if (Object.keys(settings.hooks).length === 0) {
+        delete settings.hooks;
+      }
+    }
 
     if (Object.keys(settings).length === 0) {
       fs.unlinkSync(settingsPath);
@@ -356,8 +361,14 @@ async function handleAwarenessModeSetting(mode: string, isGlobal: boolean): Prom
       settings = JSON.parse(content);
     }
 
-    // TODO: Hook-Inhalt wird in SPEC.md-Phase definiert
-    settings.hooks = { UserPromptSubmit: `node ${path.join(__dirname, 'hook-handler.js')}` };
+    if (!settings.hooks) { settings.hooks = {}; }
+    settings.hooks.UserPromptSubmit = [
+      {
+        hooks: [
+          { type: 'command', command: `node ${path.join(__dirname, 'hook-handler.js')}` }
+        ]
+      }
+    ];
 
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
