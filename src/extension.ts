@@ -57,6 +57,17 @@ export class ClaudeWorkspaceMonitor {
   async activate(): Promise<void> {
     Logger.log(`🚀 Klaus'C0dehelfer startet…`);
 
+    // Upgrade-Detection: Check if extension path changed (upgrade detected)
+    const currentPath = extensionContext.extension.extensionPath;
+    const lastKnownPath = extensionContext.globalState.get<string>('lastExtensionPath');
+
+    if (lastKnownPath && currentPath !== lastKnownPath) {
+      Logger.log(`♻️  Upgrade detected: ${lastKnownPath.split('/').pop()} → ${currentPath.split('/').pop()}`);
+      await this.handleUpgrade(lastKnownPath, currentPath);
+    }
+
+    extensionContext.globalState.update('lastExtensionPath', currentPath);
+
     this.mtimesFile = this.getMtimesPath();
 
     // Registriere Callback → Handlung bei Config-Änderungen
@@ -81,6 +92,27 @@ export class ClaudeWorkspaceMonitor {
     });
 
     this.initializeWorkspace();
+  }
+
+  private async handleUpgrade(oldPath: string, newPath: string): Promise<void> {
+    Logger.debug(`🔧 Handling upgrade: re-registering hooks with new path`);
+
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders?.length) {
+      Logger.debug(`📁 No workspace folders, skipping hook update`);
+      return;
+    }
+
+    const insp = vscode.workspace.getConfiguration('claude-workspace-monitor')
+      .inspect<string>('awarenessMode');
+
+    const isGlobal = !insp?.workspaceValue;
+    const mode = isGlobal ? (insp?.globalValue ?? 'none') : (insp?.workspaceValue ?? 'none');
+
+    if (mode !== 'none') {
+      Logger.debug(`🔄 Re-registering hooks with new extension path`);
+      await handleAwarenessModeSetting(mode, isGlobal);
+    }
   }
 
   private initializeWorkspace(): void {
