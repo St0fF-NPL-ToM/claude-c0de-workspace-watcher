@@ -80,8 +80,25 @@ This prevents reading a partially-written state file.
 
 Describes a future MultiDiff architecture that is **not yet implemented** — treat it as a design target for future work, not documentation of current code.
 
+## Versioning & Build Workflow
+
+The extension uses **post-commit versioning**: the version number (e.g., `0.4.0-i47`) is automatically incremented after each commit by the `.git/hooks/post-commit` hook.
+
+**Workflow (always follow this order):**
+1. Make code changes
+2. `git add` (include `package.json` — it will have the current version)
+3. `git commit` → post-commit hook fires, increments version, auto-stages the updated `package.json` for the next commit
+4. `npm run bundle` → builds with current version
+5. `npx vsce package` → creates VSIX with current version
+6. **Test the VSIX** before next commit
+
+This ensures the committed version and the built VSIX always match. `package.json` will be dirty after each commit (post-commit hook increments it), which is normal — it's ready for the next commit.
+
+The `.git/hooks/post-commit` script also runs `git add package.json` automatically, so the incremented version is staged for the next commit without manual intervention.
+
 ## Bundling Notes
 
-- `--external:vscode` is mandatory — the VSCode API is provided by the host at runtime.
+- `--external:vscode` is mandatory for `extension.ts` only — the VSCode API is provided by the host at runtime.
+- `hook-handler.ts` does NOT use `--external:vscode` — it runs in Claude Code runtime where VSCode is not available.
 - `minimatch` (the only runtime dependency) is bundled in.
 - `tsconfig.json` uses `"module": "commonjs"`, `"target": "ES2020"`, strict mode, no emit (esbuild handles emit).
