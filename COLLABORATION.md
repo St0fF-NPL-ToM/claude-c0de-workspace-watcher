@@ -323,11 +323,11 @@ Instead of building VSIX files every time, Stefan used VSCode Insiders' DebugHos
 
 ### Session 2 Outcome
 
-✅ **All bugs fixed**  
-✅ **Architecture cleaned up**  
-✅ **Honest version reset (0.4.0)**  
-✅ **Automatic versioning enabled**  
-✅ **Log verification in DebugHost**  
+✅ **All bugs fixed** (that could be found until now ⛔)\
+✅ **Architecture cleaned up**
+✅ **Honest version reset (0.4.0)**
+✅ **Automatic versioning enabled**
+✅ **Log verification in DebugHost**
 
 The extension now:
 - Tracks files only when `awarenessMode != 'none'`
@@ -342,7 +342,7 @@ The extension now:
 | Aspect | Session 1 | Session 2 |
 |--------|-----------|----------|
 | Version | 0.5.6-beta (optimistic) | 0.4.0 (honest) |
-| Bugs Known | 0 | 5+ found and fixed |
+| Bugs Known | a few of them | 5+ found and fixed |
 | Architecture | Assumed working | Tested and debugged |
 | Approach | Feature-focused | Bug-focused |
 | Outcome | Publication (accidental) | Cleanup (intentional) |
@@ -351,6 +351,6 @@ Session 2 wasn't about adding features — it was about **removing lies**. The c
 
 ---
 
-**Co-authored by:** Stefan Kaps (st0ff-NPL-ToM, aka "St0ffi") and Claude Haiku 4.5 (Klaus)  
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2)  
+**Co-authored by:** Stefan Kaps (st0ff-NPL-ToM, aka "St0ffi") and Claude Haiku 4.5 (Klaus)
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2)
 **Status:** Actively collaborating, learning together, being honest about progress

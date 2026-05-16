@@ -15,10 +15,17 @@ const path = require('path');
 const packagePath = path.join(__dirname, '../../package.json');
 const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
 
-const version = pkg.version.split('.');
-const patch = parseInt(version[2]) + 1;
-version[2] = patch.toString();
-pkg.version = version.join('.');
+// Parse version: X.Y.Z-BUCHSTABEcount (e.g., 0.4.0-i42)
+const versionMatch = pkg.version.match(/^(\d+)\.(\d+)\.(\d+)-([a-z])(\d+)$/);
+
+if (!versionMatch) {
+  console.error('Invalid version format. Expected: X.Y.Z-BUCHSTABEcount (e.g., 0.4.0-i42)');
+  process.exit(1);
+}
+
+const [, major, minor, revision, letter, countStr] = versionMatch;
+const count = parseInt(countStr) + 1;
+pkg.version = `${major}.${minor}.${revision}-${letter}${count}`;
 
 fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2) + '\n');
 
