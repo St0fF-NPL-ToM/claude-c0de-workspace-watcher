@@ -92,6 +92,8 @@ export class ClaudeWorkspaceMonitor {
 
       this.setupWorkspaceWatchers( isActive );
 
+      const version = (extensionContext.extension.packageJSON as any).version || 'unknown';
+      Logger.debug(`📦 Klaus'C0dehelfer version: ${version}`);
       Logger.debug(`📋 Settings: awarenessMode=${config.get('awarenessMode')}`);
       Logger.debug(`📋 Settings: stateFileName=${config.get('stateFileName') || 'KlausC0deHelferData'}`);
       Logger.debug(`📋 State file: ${this.mtimesFile}`);
