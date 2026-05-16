@@ -222,13 +222,16 @@ export class ClaudeWorkspaceMonitor {
   private saveState(): void {
     try {
       const absolutePath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, this.mtimesFile);
+      const lockPath = `${absolutePath}.lock`;
       const dir = path.dirname(absolutePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
 
+      fs.writeFileSync(lockPath, '');
       this.state.lastClaude = new Date().toISOString();
       fs.writeFileSync(absolutePath, JSON.stringify(this.state, null, 2));
+      fs.unlinkSync(lockPath);
       Logger.debug(`💾 State saved to ${absolutePath}`);
     } catch (err) {
       Logger.error(`Failed to save state: ${err}`);

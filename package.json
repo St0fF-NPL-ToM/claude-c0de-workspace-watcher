@@ -115,7 +115,7 @@
     "vscode:prepublish": "npm run bundle",
     "bundle": "npm run bundle:ext && npm run bundle:hook",
     "bundle:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --minify",
-    "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --external:vscode --minify",
+    "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --minify",
     "compile": "tsc --noEmit",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src"

@@ -21,33 +21,64 @@ npx vsce package        # Create installable .vsix file
 
 ## Architecture
 
-The extension consists of two scripts for two different runtimes, bundled independently via esbuild:
+The extension is a two-runtime system:
 
-### `src/extension.ts` → `dist/extension.js` — VSCode runtime
+1. **VSCode Runtime** (`src/extension.ts`) — monitors files, writes state to disk
+2. **Claude Code Runtime** (`src/hook-handler.ts`) — reads state, injects context via hook
 
-Runs inside VSCode as the extension. Core class is `ClaudeWorkspaceMonitor`:
+Both are bundled independently via esbuild.
 
-- **Activation** (`onStartupFinished`): loads persisted state, sets up `vscode.FileSystemWatcher` instances per workspace folder, registers document save/create/delete/rename listeners.
-- **`trackFileChange()`**: filters excluded paths, reads mtime via `fs.statSync`, updates in-memory state map.
-- **`saveStateDebounced()`**: 5-second debounce before `saveState()` writes JSON to disk.
-- **`getMtimesPath()`**: resolves state file path — config override → `.vscode/.workspaceChanges.json` → home fallback.
-- **`handleAwarenessModeSetting(mode)`**: dialog flow that writes Claude Code hook config into `.claude/settings.json`.
-- **`checkClaudeIntegration()`**: checks whether the hook is already registered in `.claude/settings.json`.
-- `awarenessMode` config (`none | onDemand | realTime`) is the main user-facing setting.
+### VSCode Runtime (`src/extension.ts` → `dist/extension.js`)
 
-### `src/hook-handler.ts` → `dist/hook-handler.js` — Claude Code runtime
+Core class: `ClaudeWorkspaceMonitor`
 
-Runs inside Claude Code (not VSCode) when the `UserPromptSubmit` hook fires. Has no VSCode API access. Reads JSON from stdin, locates the workspace, reads the state file written by the extension, and writes `{ additionalContext: "..." }` to stdout so Claude Code can inject workspace context into the prompt.
+- **Activation** (`onStartupFinished`): loads persisted state from disk, sets up file watchers, registers configuration change listeners.
+- **`trackFileChange(filePath)`**: checks exclusion patterns, gets relative path, appends to in-memory file list, triggers `saveStateDebounced()`.
+- **`saveStateDebounced()`**: 5-second debounce timer that calls `saveState()`.
+- **`saveState()`**: implements **Lock+Danke IPC pattern** (see below), writes `{ lastClaude, files }` to `.vscode/KlausC0deHelferData.json`.
+- **`getMtimesPath()`**: resolves state filename from config (default: `KlausC0deHelferData`).
+- **`handleAwarenessModeSetting(mode, isGlobal)`**: registers the hook-handler in `.claude/settings.local.json` (workspace or global).
+- **Config**:
+  - `awarenessMode` (`none | onDemand | realTime`): controls whether the hook fires.
+  - `stateFileName`: name of state file (default `KlausC0deHelferData`, stored as `.vscode/{name}.json`).
+  - `includePatterns`: glob array of files to monitor (source code, config, docs).
+  - `excludePatterns`: glob array of noise to ignore (build artifacts, cache, `.git`, `node_modules`).
 
-The extension registers this script as a hook in `.claude/settings.json` — that's the bridge between the two runtimes.
+### Claude Code Runtime (`src/hook-handler.ts` → `dist/hook-handler.js`)
 
-### Known Naming Discrepancy
+Runs inside Claude Code when `UserPromptSubmit` hook fires. No VSCode API access.
 
-The extension writes **`.vscode/.workspaceChanges.json`** but `hook-handler.ts` reads **`.vscode/KlausC0deHelferData.json`** (per SPEC.md). These filenames do not currently match — this is an open inconsistency between the spec and implementation.
+- **Input**: hook metadata from Claude Code (workspace path, etc.) via stdin as JSON.
+- **Lock-Wait Pattern**: waits up to 5 seconds for `.vscode/KlausC0deHelferData.json.lock` to disappear (ensures VSCode isn't writing).
+- **Read State**: parses `.vscode/KlausC0deHelferData.json`, extracts `files` array.
+- **Create Danke File**: writes `.vscode/KlausC0deHelferData.json.danke` as a timestamp marker (for future race-condition handling).
+- **Output**: writes `{ additionalContext: "..." }` to stdout. Claude Code harness parses this and injects the context into the prompt.
+
+**Known Issue**: Hook output is being written to stdout, but Claude Code harness is not injecting the `additionalContext` into the prompt. Debug checklist:
+  - Verify hook command in `.claude/settings.local.json` is correct: `node /path/to/dist/hook-handler.js`
+  - Check hook-handler stderr for errors via Claude Code logs
+  - Verify state file has non-empty `files` array when hook fires
+  - Confirm `UserPromptSubmit` hook syntax in settings is correct (see extension.ts line 368-374)
+
+### Lock+Danke IPC Pattern
+
+Synchronization between VSCode (writing) and Claude (reading):
+
+**Write side** (extension.ts `saveState()`):
+1. Write `.lock` file (signal: "writing in progress")
+2. Write state JSON
+3. Delete `.lock` file (signal: "write complete")
+
+**Read side** (hook-handler.ts `handleUserPromptSubmit()`):
+1. Poll for `.lock` absence (max 5s wait)
+2. Read state JSON
+3. Write `.danke` file (signal: "read complete" — currently unused but prepared for future bi-directional signaling)
+
+This prevents reading a partially-written state file.
 
 ### SPEC.md
 
-Describes a future MultiDiff architecture (`diffToKlaus()`, `diffChangesToKlaus()`, `diffFileToKlaus()`) that is **not yet implemented**. Treat it as the design target for future work, not a description of current code.
+Describes a future MultiDiff architecture that is **not yet implemented** — treat it as a design target for future work, not documentation of current code.
 
 ## Bundling Notes
 
