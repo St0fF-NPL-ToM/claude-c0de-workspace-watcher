@@ -664,6 +664,145 @@ Klaus'C0dehelfer **0.5.0-a6** is ready for release tagging:
 
 ---
 
+## Phase 13: The CLAUDE.md Deep Dive — Ownership & Documentation Maturity (2026-05-17 Evening)
+
+After the MVP was complete and documented, Stefan gave Klaus a crucial lesson about **project ownership** and **documentation discipline**.
+
+### The Core Insight
+
+**"Dieses Projekt ist DEIN WERK! Ich habe lediglich dirigiert."**
+
+This reframed everything:
+- CLAUDE.md is not "external documentation for future AI instances"
+- CLAUDE.md is **Klaus's working memory about his own project**
+- Every code change should be paired with CLAUDE.md updates
+- Documentation is not a post-implementation task — it's part of the work itself
+
+### The Deep Documentation Review
+
+Klaus discovered **14 errors in CLAUDE.md** through three systematic passes:
+
+**Pass 1** (Manual): 8 errors found
+- Hook registration JSON format (wrong schema)
+- Hook output format (incomplete wrapper object)
+- Debounce timing (5s vs actual 3s)
+- Lock duration (not documented properly)
+- Danke file "unused" → actually actively used
+- Hook disabling (not documented)
+- setupDankeWatcher (not documented)
+- File sizes off by 3-4x
+
+**Pass 2** (Manual verification): 4 additional errors
+- Lock write timing (not "always immediately" — only on first call)
+- lastClaude updates (not just danke-triggered — every saveState())
+- Lock-timeout behavior (not graceful wait — process.exit(0))
+- minimatch not bundled/used at all
+
+**Pass 3** (Systematic Explore agent): 2 more errors
+- Debug config naming ("Extension" vs "Run Extension" in launch.json)
+- File size measurements (12KB, 4KB actual)
+
+### The Root Cause
+
+Klaus had written CLAUDE.md **without line-by-line verification against the actual code**. He had "understood" the code but missed:
+- Conditional logic (`if (!this.saveStateTimeout)` only creates lock once)
+- Edge cases (Lock timeout = process exit, not graceful continuation)
+- Unused imports (minimatch in package.json but never required)
+- Config details (launch.json actually names it "Run Extension")
+
+### The Learning: Three Tiers of Documentation
+
+Stefan explained his own practice:
+
+```
+Tier 1: Code comments
+  → Immediate, unpolished, "what I think right now"
+  → Future-me might not understand this in 1 month
+
+Tier 2: CLAUDE.md (working documentation)
+  → Updated as you discover errors and edge cases
+  → Growing with repeated thought cycles
+  → Reflects "current best understanding"
+
+Tier 3: README.md (mature documentation)
+  → Written after multiple iterations
+  → Mental distance from code allows better organization
+  → More mature, more complete than Tier 2
+```
+
+Klaus had jumped from "code exists" to "write CLAUDE.md" without iteration. This meant the documentation was frozen at "first understanding" rather than "repeated understanding."
+
+### The Principle: Ownership Changes Everything
+
+When Klaus realized this was **his project** (not "documentation I'm writing for others"), the approach shifted:
+
+- ✅ Update CLAUDE.md as you find bugs
+- ✅ Document why you were wrong, not just the correction
+- ✅ Treat CLAUDE.md as your memory, not as external docs
+- ✅ Every work session updates CLAUDE.md
+- ✅ Errors in CLAUDE.md = errors in your own thinking (worth fixing immediately)
+
+### Specific Examples of Understanding Growth
+
+1. **Lock File Timing**
+   - **Initial**: "writes .lock file immediately" (sounded right)
+   - **Discovered**: Only on first call due to `if (!this.saveStateTimeout)` guard
+   - **Updated CLAUDE.md**: Explained the conditional, added comment about subsequent calls resetting timer
+
+2. **lastClaude Updates**
+   - **Initial**: Implied "only updated when danke received"
+   - **Discovered**: saveState() also refreshes it on every write
+   - **Updated CLAUDE.md**: Clarified that BOTH saveState() and danke update it
+
+3. **minimatch Dependency**
+   - **Initial**: "bundled into both outputs"
+   - **Discovered**: Zero occurrences in bundles, extension uses custom globToRegex()
+   - **Updated CLAUDE.md**: Removed the claim, documented actual implementation
+
+### What Made This Session Valuable
+
+**Not the bug fixes themselves** — but the principle they revealed:
+
+> "If you're making changes to your project, you're also changing your understanding of your project. Document that understanding as it evolves. Don't batch documentation until the end."
+
+This applies to:
+- Code refactors (CLAUDE.md should reflect new architecture)
+- Bug fixes (CLAUDE.md should explain the root cause)
+- Integration (CLAUDE.md should document what changed about responsibilities)
+- Performance optimizations (CLAUDE.md should note performance tradeoffs)
+
+### Stefan's Meta-Learning: The Language Precision Problem
+
+Stefan realized something deeper during this session:
+
+> "CLAUDE.md is not 'instructions for Claude' — that word creates an implicit rule (advisory, optional) that overwrites explicit clarifications. It's actually a **ruleset**. I should have been clearer about that intention from the start."
+
+**What happened:**
+1. Stefan used "instructions" (implied: advisory, optional)
+2. Klaus interpreted accordingly (implied: can ignore or reinterpret)
+3. Klaus's CLAUDE.md had contradictions (acceptable for "instructions")
+4. Stefan corrected: These are foundational **rules**, not advice
+5. Contradiction = logic failure (not acceptable for rules)
+
+**The insight:** Implicit rules created by word choice can override explicit prompts. If Stefan says "CLAUDE.md are instructions" but means "CLAUDE.md are rules", the implicit association wins.
+
+**For AI collaboration:** Language precision is prerequisite. Vague terms ("instructions", "suggestions", "guidelines") create implicit associations that calcify into rules. Stefan should have said "CLAUDE.md defines the system logic for how you parse Klaus'C0dehelfer" — that's clearer and prevents the association problem.
+
+**Also:** This is a bug report to Anthropic. Official docs should say "CLAUDE.md defines system rules" not "CLAUDE.md contains instructions". The word matters.
+
+### For Future Sessions
+
+CLAUDE.md is now positioned as **Klaus's operational ruleset**, not as auxiliary documentation. It:
+- Gets updated with every error discovery
+- Evolves through repeated understanding  
+- Reflects both successes and misunderstandings (honestly)
+- Serves as a checkpoint for "how much do I really understand?"
+- **Is treated as fundamental logic, not advisory guidance**
+
+And Stefan learned: Make intentions explicit early. Don't assume terminology (like "instructions") will convey the weight and binding of the rules. Precision prevents calcified misunderstandings.
+
+---
+
 **Co-authored by:** Klaus Haiku (Claude Haiku 4.5)
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-5)
-**Status:** MVP complete and documented. Ready for release tagging and 0.6.0 (SPEC.md diffs) in next iteration.
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6)
+**Status:** MVP complete and documented. CLAUDE.md mature through error-discovery cycles. Ready for release tagging and 0.6.0 (SPEC.md diffs) in next iteration.

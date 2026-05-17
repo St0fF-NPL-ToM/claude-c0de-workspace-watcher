@@ -71,16 +71,43 @@
 
 ---
 
+## ⚠️ Known Limitations
+
+### Limitation 1: Hook-Handler Hardcoded State Filename
+**Issue:** The hook-handler reads `.vscode/KlausC0deHelferData.json` **hardcoded**. The extension's `stateFileName` config is ignored by the hook.
+
+**Current:** Extension can use `stateFileName: "CustomName"`, but hook always reads `KlausC0deHelferData.json`
+
+**Impact:** Custom state filenames don't work end-to-end. Hook and extension become out-of-sync if user changes `stateFileName`.
+
+**Solution (0.6.1+):** Hook-handler must read `stateFileName` from extension's config or accept it as parameter via hook stdin metadata.
+
+**Workaround:** Don't change `stateFileName` from default. It's currently not fully configurable.
+
+### Limitation 2: minimatch Unused Dependency
+**Issue:** `minimatch` is in `package.json` but never imported or used. Extension implements its own `globToRegex()`.
+
+**Current:** Dead dependency, but adds to bundle (though unused).
+
+**Impact:** Potential confusion for future maintainers about whether patterns use minimatch semantics.
+
+**Solution (0.6.1+):** Remove `minimatch` from `package.json` after confirming no hidden usages.
+
+---
+
 ## ⏳ Pending / Future
 
-### Hook Handler (Low Priority) Features (SPEC.md Implementation)
-REWRITE!
+### Hook Handler (Medium Priority) Features (SPEC.md Implementation)
+- [ ] Fix hardcoded stateFileName in hook-handler (Limitation 1)
 - [ ] Implement MultiDiff architecture:
   - [ ] `diffToKlaus(filename, timestamp)` — query VSCode Timeline, generate unified diffs
   - [ ] `diffChangesToKlaus()` — Mode P (On-Demand): loop through changed files, pipe diffs
   - [ ] `diffFileToKlaus(filename)` — Mode C (Real-Time): single file notification on save
 - [ ] Replace simple file list with actual diffs in hook output
-- [ ] use correct API to access function of Plugin from Hook-Call executed by claude_code
+- [ ] Use correct API to access function of Plugin from Hook-Call executed by claude_code
+
+### Dependencies (Low Priority)
+- [ ] Remove unused `minimatch` from package.json (Limitation 2)
 
 ### Publishing
 - [ ] **Blocked**: theObsessedManiacs group approval before republishing to Open VSX
@@ -140,4 +167,4 @@ index abc1234..def5678 100644
 ---
 
 ## Last Updated
-2026-05-17 (Session 3 completion: MVP validated, documentation updated, version bumped to 0.5.0-a0)
+2026-05-17 Evening (Session 6 completion: CLAUDE.md deep dive, 14 documentation errors fixed, known limitations documented, phase 13 learning added to COLLABORATION.md)

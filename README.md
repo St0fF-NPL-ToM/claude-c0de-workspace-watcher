@@ -2,7 +2,7 @@
 
 **Passive filesystem awareness for Claude Code** — automatically track file changes across your VSCode workspace and sync them to Claude via hooks.
 
-by `theObsessedManiacs` – **We never rule…** but this time, we lead Claude to rule VSCode. 🚀
+by `theObsessedManiacs` – **We never rule…** but this time, we lead Claude to rule VSCode. →
 
 ---
 
@@ -130,25 +130,26 @@ Klaus stores workspace state in `.vscode/KlausC0deHelferData.json`. Don't like t
 ### Lock+Danke Synchronization
 
 **Extension (VSCode Runtime) → Hook (Claude Runtime):**
-1. Create `.lock` file (signal: "writing")
-2. Write state JSON with `files` array
-3. Delete `.lock` file (signal: "done")
+1. File change detected → `saveStateDebounced()` creates `.lock` file immediately (signals: "I'm collecting file changes")
+2. Wait 3 seconds (debounce window; reset on each new file change)
+3. After 3s silence → `saveState()` writes state JSON, then deletes `.lock` (signals: "batch complete")
 
 **Hook (Claude Runtime) → Extension (VSCode Runtime):**
-1. Wait while `.lock` exists (max 5 seconds)
-2. Read state JSON atomically
-3. Create `.danke` file (signal: "I consumed this data")
+1. On prompt → polls for `.lock` absence (max 5 seconds)
+2. If lock persists after 5s → exits silently without context (no data available)
+3. Otherwise → reads state JSON atomically, creates `.danke` file (signals: "I consumed this data")
 
 **Extension (VSCode Runtime) → Ready for next cycle:**
 1. Dedicated FileSystemWatcher detects `.danke` creation
-2. Update `lastClaude` timestamp
+2. Update `lastClaude` timestamp, clear `files` array
 3. Delete `.danke` file
 4. Call `saveStateDebounced()` for next state
 
 This pattern ensures:
-- ✅ No partial reads (watcher waits for lock release)
+- ✅ No partial reads (hook waits for lock release)
 - ✅ No lost messages (danke signals consumption)
 - ✅ Race-free file operations (atomic reads/writes)
+- ✅ Immediate lock signal (debounce doesn't delay lock setup)
 - ✅ Cross-platform reliability (no process signals)
 
 ---
