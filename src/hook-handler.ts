@@ -9,12 +9,26 @@ interface HookState {
   files?: string[];
 }
 
-interface HookOutput {
+interface HookSpecificOutput {
+  hookEventName: 'UserPromptSubmit';
   additionalContext: string;
+}
+
+interface HookOutput {
+  hookSpecificOutput: HookSpecificOutput;
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildOutput(additionalContext: string): HookOutput {
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext,
+    },
+  };
 }
 
 async function handleUserPromptSubmit(): Promise<void> {
@@ -67,10 +81,10 @@ async function handleUserPromptSubmit(): Promise<void> {
     process.stderr.write(`[WARN] Could not create danke file: ${err}\n`);
   }
 
-  const debugInfo = `\n\n🔒 Lock: waited ${lockWaitMs}ms | State: read ${changedFiles.length} files | Danke: created`;
-  const output: HookOutput = {
-    additionalContext: `📝 Klaus'C0dehelfer detected file changes since last prompt:\n${contextLines}${debugInfo}`,
-  };
+  process.stderr.write(`[DEBUG] Lock: waited ${lockWaitMs}ms | State: read ${changedFiles.length} files | Danke: created\n`);
+
+  const additionalContext = `Following workspace-files have changed:\n${contextLines}`;
+  const output = buildOutput(additionalContext);
 
   console.log(JSON.stringify(output));
 }
