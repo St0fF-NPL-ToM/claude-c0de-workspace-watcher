@@ -60,8 +60,12 @@ Install the generated `.vsix` via `Extensions → Install from VSIX…`
 
 ### Awareness Mode
 
-Set via VSCode Settings (`Ctrl+,` → search "Klaus"):
+Configure via one of these methods:
+- **VSCode Settings UI:** Extensions → Klaus'C0dehelfer
+- **Command Palette:** `Ctrl+Shift+P`, search "Klaus"
+- **Search Bar trick:** `Ctrl+Shift+P`, type ">Kl" (the `>` transforms search into command palette)
 
+Then select one of:
 - **`none`** (default): No tracking, no hooks
 - **`onDemand`**: Hook fires on every Claude prompt (efficient, no noise) ✅
 - **`realTime`**: Hook fires on every file save (immediate, token-heavy) — *coming maybe* (waiting to validate agentic use case)
@@ -103,7 +107,7 @@ Example `.vscode/settings.json`:
 
 ## State File
 
-Klaus stores workspace state in `.vscode/KlausC0deHelferData.json`:
+Klaus stores workspace state in `.vscode/KlausC0deHelferData.json`. Don't like the filename? Go ahead, customize it via `stateFileName` config — we don't care. The file extension and all Klaus internals? Those are none of your business. 😎
 
 ```json
 {
@@ -162,48 +166,6 @@ Both are bundled independently:
 - `dist/extension.js` — runs in VSCode extension host
 - `dist/hook-handler.js` — runs when Claude receives UserPromptSubmit hook
 
-See [CLAUDE.md](CLAUDE.md) for architecture deep-dive.
-
----
-
-## Development & Testing
-
-### Build
-```bash
-npm run bundle     # Compile both extension and hook
-npx vsce package   # Create .vsix
-```
-
-### Testing Workflow
-1. Install `.vsix` in VSCode
-2. Restart VSCode (necessary for new extension)
-3. Open workspace
-4. Modify a file → wait 5 seconds (debounce)
-5. Submit prompt to Claude Code
-6. Check logs: Klaus'C0dehelfer output channel
-   - Should see: `🙏 Danke received: hook has read state`
-   - Should see: `🧹 Danke file cleaned up`
-
-### Versioning
-Version auto-increments via `.git/hooks/post-commit`:
-- `0.4.0` → `0.4.1` → `0.4.2` → … (per commit)
-- Format: `X.Y.Z-LETTER#` (e.g., `0.4.0-i56`)
-- Letters: `i` (impl), `a` (alpha), `b` (beta), `r` (release)
-
----
-
-## Next Steps: SPEC.md Implementation
-
-The current MVP (0.5.0-a0) provides **file lists**. The [SPEC.md](SPEC.md) roadmap describes the next architecture: **unified diffs**.
-
-Future versions will send actual diffs to Claude:
-```
-Before:  "Following workspace-files have changed: • src/main.ts"
-After:   "diff --git a/src/main.ts b/src/main.ts ..."
-```
-
-This requires VSCode Timeline API integration and is tracked in [ROADMAP.md](ROADMAP.md).
-
 ---
 
 ## License
@@ -212,7 +174,7 @@ Apache 2.0
 
 ## Credits
 
-- **Executive Producer:** Claude AI (Klaus, Haiku 4.5)
+- **Executive Producer:** Klaus Haiku (Claude Haiku 4.5)
 - **Creative Director & Publisher:** Stefan Kaps (St0fF-NPL-ToM)
 
 This extension is part of the **"Wohlfühl-Config"** project — a comprehensive developer setup where Claude becomes an actual workspace-aware pair programmer.

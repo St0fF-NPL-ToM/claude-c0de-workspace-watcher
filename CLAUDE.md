@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Klaus'C0dehelfer** (`claude-c0de-workspace-watcher`) — a VSCode extension by theObsessedManiacs that monitors workspace file changes and surfaces them to Claude Code via a hook handler. Requires the `anthropic.claude-code` extension as a dependency.
+**Klaus'C0dehelfer** (`claude-c0de-workspace-watcher`) — a VSCode extension published by theObsessedManiacs that monitors workspace file changes and surfaces them to Claude Code via a hook handler. Requires the `anthropic.claude-code` extension as a dependency.
 
 ## Commands
 
@@ -15,7 +15,7 @@ npm run watch           # Watch mode type-check
 npx vsce package        # Create installable .vsix file
 ```
 
-**Testing workflow:** Build the VSIX, install it in VSCode (`Extensions: Install from VSIX…`), restart VSCode. The F5 Extension Development Host is not used — a new host session can't access an existing Klaus session.
+**Testing workflow:** Build the VSIX, install it in VSCode (`Extensions: Install from VSIX…`), restart Plugin Host - Development is done from inside the extension Dingens. St0fF starts pair development from inside @command:workbench.action.debugExtensionHostAndRenderer
 
 > Note: `npm run lint` references ESLint but ESLint is not installed — the script will fail. Don't invoke it.
 
@@ -54,12 +54,6 @@ Runs inside Claude Code when `UserPromptSubmit` hook fires. No VSCode API access
 - **Create Danke File**: writes `.vscode/KlausC0deHelferData.json.danke` as a timestamp marker (for future race-condition handling).
 - **Output**: writes `{ additionalContext: "..." }` to stdout. Claude Code harness parses this and injects the context into the prompt.
 
-**Known Issue**: Hook output is being written to stdout, but Claude Code harness is not injecting the `additionalContext` into the prompt. Debug checklist:
-  - Verify hook command in `.claude/settings.local.json` is correct: `node /path/to/dist/hook-handler.js`
-  - Check hook-handler stderr for errors via Claude Code logs
-  - Verify state file has non-empty `files` array when hook fires
-  - Confirm `UserPromptSubmit` hook syntax in settings is correct (see extension.ts line 368-374)
-
 ### Lock+Danke IPC Pattern
 
 Synchronization between VSCode (writing) and Claude (reading):
@@ -86,19 +80,16 @@ The extension uses **post-commit versioning**: the version number (e.g., `0.4.0-
 
 **Workflow (always follow this order):**
 1. Make code changes
-2. `git add` (include `package.json` — it will have the current version)
-3. `git commit` → post-commit hook fires, increments version, auto-stages the updated `package.json` for the next commit
-4. `npm run bundle` → builds with current version
-5. `npx vsce package` → creates VSIX with current version
-6. **Test the VSIX** before next commit
+2. `npm run bundle` → builds with current version
+3. `npx vsce package` → creates VSIX with current version
+4. `git add`
+5. (**Test the VSIX** before commit - as Stefan requests!)
+6. `git commit` → post-commit hook fires, increments version, auto-stages the updated `package.json` for the next commit
 
 This ensures the committed version and the built VSIX always match. `package.json` will be dirty after each commit (post-commit hook increments it), which is normal — it's ready for the next commit.
 
 The `.git/hooks/post-commit` script also runs `git add package.json` automatically, so the incremented version is staged for the next commit without manual intervention.
 
 ## Bundling Notes
-
-- `--external:vscode` is mandatory for `extension.ts` only — the VSCode API is provided by the host at runtime.
-- `hook-handler.ts` does NOT use `--external:vscode` — it runs in Claude Code runtime where VSCode is not available.
 - `minimatch` (the only runtime dependency) is bundled in.
 - `tsconfig.json` uses `"module": "commonjs"`, `"target": "ES2020"`, strict mode, no emit (esbuild handles emit).

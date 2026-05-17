@@ -214,9 +214,9 @@ export class ClaudeWorkspaceMonitor {
       this.state.files = [];
       try {
         fs.unlinkSync(uri.fsPath);
-        Logger.log(`🧹 Danke file cleaned up`);
+        Logger.debug(`🧹 Danke file cleaned up`);
       } catch (err) {
-        Logger.log(`ℹ️  Could not delete danke file: ${err}`);
+        Logger.debug(`ℹ️  Could not delete danke file: ${err}`);
       }
       this.saveStateDebounced();
     });
@@ -289,13 +289,26 @@ export class ClaudeWorkspaceMonitor {
 
   private saveStateTimeout: NodeJS.Timeout | null = null;
   private saveStateDebounced(): void {
+    if (!this.saveStateTimeout) {
+      try {
+        const dir = path.dirname(this.mtimesFile);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(`${this.mtimesFile}.lock`, '');
+        Logger.debug(`🔒 Lock set (debounce started)`);
+      } catch (err) {
+        Logger.debug(`⚠️  Could not set lock on debounce: ${err}`);
+      }
+    }
+
     if (this.saveStateTimeout) {
       clearTimeout(this.saveStateTimeout);
     }
 
     this.saveStateTimeout = setTimeout(() => {
       this.saveState();
-    }, 5000);
+    }, 3000);
   }
 
   private saveState(): void {
@@ -307,7 +320,9 @@ export class ClaudeWorkspaceMonitor {
         fs.mkdirSync(dir, { recursive: true });
       }
 
-      fs.writeFileSync(lockPath, '');
+      if (!fs.existsSync(lockPath)) {
+        fs.writeFileSync(lockPath, '');
+      }
       this.state.lastClaude = new Date().toISOString();
       fs.writeFileSync(absolutePath, JSON.stringify(this.state, null, 2));
       fs.unlinkSync(lockPath);

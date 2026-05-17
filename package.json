@@ -2,7 +2,7 @@
   "name": "claude-c0de-workspace-watcher",
   "displayName": "Klaus'C0dehelfer",
   "description": "Passive filesystem awareness for Claude Code: tracks file changes and syncs with Claude's context",
-  "version": "0.5.0-a3",
+  "version": "0.5.0-a5",
   "publisher": "theObsessedManiacs",
   "license": "Apache-2.0",
   "icon": "images/icon.png",

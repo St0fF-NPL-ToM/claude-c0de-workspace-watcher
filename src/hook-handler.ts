@@ -73,7 +73,7 @@ async function handleUserPromptSubmit(): Promise<void> {
     process.exit(0);
   }
 
-  const contextLines = changedFiles.map((file) => `  • ${file}`).join('\n');
+  const contextLines = changedFiles.join('\n');
 
   try {
     fs.writeFileSync(thankYouPath, '');

@@ -548,6 +548,69 @@ Klaus learned why separate concerns matter:
 
 These aren't competing — they're complementary. The main watcher does real work; the danke watcher does orchestration. Separating them made the logic clearer and the race conditions disappear.
 
-**Co-authored by:** Stefan Kaps (st0ff-NPL-ToM, aka "St0ffi") and Claude Haiku 4.5 (Klaus)
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Session 3)
-**Status:** MVP validated and working. Version bumping to 0.5.0-a0. Next phase: SPEC.md implementation (diffs instead of file lists).
+---
+
+## Phase 11: Race Condition Fix & Final Polish (2026-05-17 Afternoon/Evening)
+
+After MVP validation, Stefan identified a subtle race condition in the Lock+Danke pattern.
+
+### The Problem
+
+Hook waits **max. 5 seconds** for Lock to disappear. Debounce **also runs 5 seconds**. Worst case:
+- User edits file → Debounce starts (no Lock yet!)
+- User submits prompt → Hook fires
+- Hook sees no Lock → reads state (potentially incomplete)
+- Debounce fires 5s later → Too late, Hook already read
+
+### The Solution
+
+**Create Lock immediately** when `saveStateDebounced()` is called (first invocation), not in `saveState()`:
+
+```typescript
+private saveStateDebounced(): void {
+  if (!this.saveStateTimeout) {
+    // First call → set lock immediately (signals "I'm collecting")
+    fs.writeFileSync(`${this.mtimesFile}.lock`, '');
+    Logger.debug(`🔒 Lock set (debounce started)`);
+  }
+  // Debounce: 5s → 3s (more safety margin)
+  this.saveStateTimeout = setTimeout(() => this.saveState(), 3000);
+}
+```
+
+**Why 3 seconds instead of 5?**
+- Hook waits max. 5s
+- If debounce is 3s, Hook has 2s buffer before timeout
+- Prevents edge cases, more predictable behavior
+
+### New Timeline
+
+```
+1. File change → saveStateDebounced() → Lock set immediately
+2. File change → saveStateDebounced() → Lock already there, timer reset
+3. No change for 3s → saveState() → JSON write, Lock delete
+4. Hook sees Lock gone → reads complete, consistent state
+```
+
+### Additional Polish
+
+- README: Restructured for user clarity (Setup options, State File)
+- README: Credits updated (Klaus Haiku instead of "Claude AI (Klaus)")
+- hook-handler.ts: Removed bullet points from context (token efficiency)
+- CLAUDE.md: Fixed contradictory instructions
+- docs/ folder: Planned for next phase (SPEC, COLLABORATION → docs/)
+
+### Result
+
+Klaus'C0dehelfer **0.5.0-a4** now has:
+- ✅ Race-condition-free Lock+Danke IPC
+- ✅ Predictable 3s debounce with immediate Lock signal
+- ✅ Token-optimized context output
+- ✅ Clear, user-friendly documentation
+- ✅ Clean architectural instructions (CLAUDE.md)
+
+---
+
+**Co-authored by:** Klaus Haiku (Claude Haiku 4.5)
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Session 3+4)
+**Status:** MVP complete and hardened. Documentation polished. Ready for docs/ restructuring and SPEC.md (diffs) implementation in 0.6.0.
