@@ -26,7 +26,7 @@ Klaus'C0dehelfer monitors your workspace for file changes and automatically inje
 ✅ **Configurable Patterns:** Include/exclude rules for noise reduction\
 ✅ **Automatic Integration:** Hook auto-registers in `.claude/settings.local.json`\
 ✅ **Workspace-Aware:** Monitors primary workspace + all subfolders (one state file)\
-✅ **Zero Configuration:** Works out of the box once installed
+⏳ **Zero Configuration:** PostInstall auto-config coming in 0.6.0 (currently: use `Klaus'C0dehelfer: Edit Settings`)
 
 ---
 

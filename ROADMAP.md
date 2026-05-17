@@ -126,7 +126,17 @@ Denk lieber nach anstelle dumme Fragen zu stellen.  Ich weiss, Fragen sind nie d
 
 ---
 
-## ⏳ Next Phase: SPEC.md Implementation (0.6.0)
+## ⏳ Next Phase: UX Polish & SPEC.md (0.6.0)
+
+### UX Enhancement: PostInstall Auto-Configuration
+- [ ] Implement `onExtensionInstalled` hook or welcome screen
+- [ ] Auto-set sensible defaults: `awarenessMode = onDemand`, hook auto-register
+- [ ] Show warning if hook registration fails (e.g., no Claude Code extension)
+- [ ] Link to `Klaus'C0dehelfer: Edit Settings` command for manual override
+
+**Why:** "Zero Configuration" is a promise, not yet implemented. Users shouldn't have to manually hunt down settings after install.
+
+### SPEC.md Implementation: Unified Diffs
 
 The [SPEC.md](SPEC.md) roadmap describes the architecture for **unified diffs**:
 
