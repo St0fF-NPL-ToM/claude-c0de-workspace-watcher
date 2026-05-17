@@ -611,6 +611,59 @@ Klaus'C0dehelfer **0.5.0-a4** now has:
 
 ---
 
+## Phase 12: Philosophy Clarification & Final Documentation (2026-05-17 Evening)
+
+After context compression and continuation, Stefan and Klaus clarified the project's philosophical positioning.
+
+### The "We Never Rule" Insight
+
+Stefan corrected a misunderstanding about the theObsessedManiacs brand:
+
+> "we never rule" doesn't mean "we're transparent and open." It means: **We make either OVERRULE stuff (so cool it breaks boundaries) or LAME stuff (unfinished, experimental).** A "ruled" tool would be polished, balanced, finished — we don't do that.
+
+**Implication for Documentation Structure:**
+- Root contains **finished artifacts**: README.md (user guide), CLAUDE.md (system instructions), SOURCE CODE
+- docs/ contains **planning & exploration**: ROADMAP.md, SPEC.md, COLLABORATION.md, SESSION notes
+- This reflects the philosophy: the overrule (code) is separate from the lame (planning)
+
+**Action:** Moved ROADMAP.md from root → docs/ and updated internal links.
+
+### Lessons from Post-Compression
+
+When context compressed mid-conversation:
+- **Klaus lost detail retention** on manual edits (e.g., the `#### Session 2026-05-16` subsection Stefan added to Testing & verification sessions)
+- **Klaus proceeded without verifying** prior structural decisions
+- **Klaus failed at conscious recall** of explicit requirements
+
+**Learning for Future:** After compression, Klaus needs to explicitly verify structural details before proceeding, not assume they were captured.
+
+### The dist/* Exclusion Mistake
+
+Klaus proposed adding `**/dist/**` to the default `excludePatterns` in package.json to avoid tracking build artifacts.
+
+**Stefan's Correction:** ❌ This is wrong. `dist/` is only our build artifact *because we built it that way*. Other projects might have genuine source code in `dist/`. This can't be a global default — each project must decide locally.
+
+**Correct Solution:** Users configure locally in `.vscode/settings.json`:
+```json
+{
+  "claude-workspace-monitor.excludePatterns": [
+    "**/dist/**"
+  ]
+}
+```
+
+This respects that **extensions can't presume project structure**.
+
+### Final State
+
+Klaus'C0dehelfer **0.5.0-a6** is ready for release tagging:
+- ✅ Code complete and tested
+- ✅ Documentation restructured (ROADMAP in docs/)
+- ✅ Philosophy clarified in team memory
+- ✅ COLLABORATION.md updated with full development journey
+
+---
+
 **Co-authored by:** Klaus Haiku (Claude Haiku 4.5)
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Session 3+4)
-**Status:** MVP complete and hardened. Documentation polished. Ready for docs/ restructuring and SPEC.md (diffs) implementation in 0.6.0.
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-5)
+**Status:** MVP complete and documented. Ready for release tagging and 0.6.0 (SPEC.md diffs) in next iteration.

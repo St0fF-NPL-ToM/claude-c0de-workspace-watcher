@@ -36,11 +36,33 @@
 - [x] Implement automatic patch version bumping via git hook
 - [x] Document Session 2 learnings in COLLABORATION.md
 
----
+### Phase 6: MVP Validation & Polish (Session 2026-05-17)
+- [x] Implement dedicated `.danke` FileSystemWatcher
+- [x] Fix double-path bug in loadState/saveState
+- [x] Validate bi-directional sync (Lock+Danke pattern)
+- [x] Verify hook receives file list in additionalContext
+- [x] Test end-to-end: file change → prompt → Claude context injection
+- [x] Update documentation (README.md, COLLABORATION.md, ROADMAP.md)
+- [x] Bump version to 0.5.0-a0 (Alpha)
+- [x] Fix race condition: Lock on debounce start (not in saveState)
+- [x] Debounce: 5s → 3s (safety margin for Hook's max wait)
+- [x] Token optimization: Remove bullet points from context
+- [x] Documentation restructure: Create docs/ directory, move internal docs
+- [x] Honest documentation: Zero Configuration → coming maybe for 0.6.0
+- [x] Credits: Klaus Haiku as Author, Stefan Kaps as Co-Author
 
-## 🔄 In Progress / Under Review
+### Performance & UX (Done)
+- [x] Deactivate FileSystemWatchers when `awarenessMode=none` ✓ Done in Phase 5
+- [x] Debounce on state save ✓ 3-second debounce (Phase 11, with immediate Lock signal)
+- [x] Race-condition-free Lock+Danke IPC ✓ Lock set on debounce start, not in saveState()
 
-### Testing & Verification (Session 2026-05-16)
+### Documentation (Done)
+- [x] Update README.md with installation instructions ✓ Three setup methods documented
+- [x] Document hook protocol ✓ Lock+Danke IPC pattern, hook output schema in README + CLAUDE.md
+- [x] Document stateFileName config ✓ Configuration section with examples in README
+
+### Testing & verification sessions
+#### Session 2026-05-16
 - [x] Test with awarenessMode=none → no tracking
 - [x] Test with awarenessMode=onDemand → tracking active
 - [x] Verify onDidChangeWorkspaceFolders triggers correctly
@@ -58,17 +80,7 @@ REWRITE!
   - [ ] `diffChangesToKlaus()` — Mode P (On-Demand): loop through changed files, pipe diffs
   - [ ] `diffFileToKlaus(filename)` — Mode C (Real-Time): single file notification on save
 - [ ] Replace simple file list with actual diffs in hook output
-- use correct API to access function of Plugin from Hook-Call executed by claude_code
-
-### Performance & UX
-- [x] Deactivate FileSystemWatchers when `awarenessMode=none` ✓ Done in Phase 5
-- [x] Add debounce/throttle to setupWorkspaceWatchers if needed ✓ 5-second debounce on state save (in place)
-
-### Documentation
-- [ ] Update README.md with installation instructions (not just file-picker, but actual workflow)
-  - [ ] **Blocked by**: GitHub namespace claim (theObsessedManiacs) — currently private repo
-- [ ] Document hook protocol (what hook receives, what it outputs)
-- [ ] Document stateFileName stem-based config with examples
+- [ ] use correct API to access function of Plugin from Hook-Call executed by claude_code
 
 ### Publishing
 - [ ] **Blocked**: theObsessedManiacs group approval before republishing to Open VSX
@@ -78,51 +90,12 @@ REWRITE!
 
 ---
 
-## 📋 Open Questions / Decisions
-
-Denk lieber nach anstelle dumme Fragen zu stellen.  Ich weiss, Fragen sind nie dumm.  Das ist nur die Theorie.  Fragen, deren Antwort 2 Gedanken entfernt liegen sind in meinen Augen dumm, weil der Frager nicht zuende gedacht hat.
-
 ## 🔗 Related Issues / Refs
 
-- SPEC.md: Describes future MultiDiff architecture (not yet implemented)
-- COLLABORATION.md: Full story of development journey
-- SESSION_2025-05-15.md: Today's session notes
-- CLAUDE.md: Project instructions for Claude Code
-
----
-
----
-
-### Phase 6: MVP Integration (Session 2026-05-17)
-- [x] Implement dedicated `.danke` FileSystemWatcher
-- [x] Fix double-path bug in loadState/saveState
-- [x] Remove debug log and dead code from trackFileChange
-- [x] Validate bi-directional sync (Lock+Danke pattern)
-- [x] Verify hook receives file list in additionalContext
-- [x] Test end-to-end: file change → prompt → Claude context injection
-- [x] Update documentation (README.md, COLLABORATION.md, ROADMAP.md)
-- [x] Bump version to 0.5.0-a0 (Alpha)
-
----
-
-## Current State (0.5.0-a0 — MVP)
-
-✅ **MVP is complete and validated.**
-
-**What works:**
-- ✅ Extension loads, initializes, monitors files
-- ✅ File tracking with configurable include/exclude patterns
-- ✅ Hook integration: automatic config, hook fires on UserPromptSubmit
-- ✅ Bi-directional sync (Lock file for write, .danke file for read signal)
-- ✅ Claude receives file list in hook `additionalContext`
-- ✅ State persistence, config changes, workspace switching
-- ✅ Comprehensive logging and debug output
-- ✅ All bug fixes from Session 2 applied
-
-**Not yet implemented (next phase):**
-- ❌ **Diffs instead of file lists** — currently sends `"Following workspace-files have changed: • src/main.ts"`. SPEC.md calls for actual unified diffs.
-- ❌ **realTime mode** — awarenessMode accepts it but shows "coming soon"
-- ❌ **VSCode Timeline API integration** — for efficient diff generation
+- `SPEC.md`: Future MultiDiff architecture (0.6.0)
+- `COLLABORATION.md`: Full development journey
+- `SESSION_2025-05-15.md`: Session 2 notes (archived)
+- `../CLAUDE.md`: Project instructions for Claude Code
 
 ---
 

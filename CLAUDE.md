@@ -74,6 +74,17 @@ This prevents reading a partially-written state file.
 
 Describes a future MultiDiff architecture that is **not yet implemented** — treat it as a design target for future work, not documentation of current code.
 
+## Questions & Decisions
+
+When working on this project:
+
+**Thinking before asking:** Don't ask questions whose answer is two thoughts away. Invest the thinking first. Questions where the answer lies within arm's reach without effort are wasted context. This isn't about avoiding questions — it's about respecting that good questions come from having thought things through.
+
+**Examples:**
+- ❌ "Should I use `setTimeout` here?" (answer: read the debounce code 5 lines up)
+- ❌ "Does the hook see the lock file?" (answer: read the Lock+Danke pattern explanation above)
+- ✅ "I see the debounce is 3s and the hook waits 5s — is this margin enough for all scenarios?" (thoughtful question about edge cases)
+
 ## Versioning & Build Workflow
 
 The extension uses **post-commit versioning**: the version number (e.g., `0.4.0-i47`) is automatically incremented after each commit by the `.git/hooks/post-commit` hook.
