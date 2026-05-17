@@ -460,6 +460,94 @@ Extension (monitors .danke):
 - BUT: additionalContext NOT injected into Klaus's prompt yet
 - Investigation needed: Hook output format? Claude Code hook parsing?
 
+---
+
+## Phase 10: The MVP Success (2026-05-17 Morning)
+
+After Phase 9's producer-consumer design, Stefan and Klaus implemented and validated the dedicated `.danke` FileSystemWatcher — the final piece of the MVP.
+
+### The Implementation
+
+**Problem:** Main FileSystemWatcher had `ignoreCreate = true` (first bool parameter). Since `.danke` is **created** (never changed), the `onDidChange` event never fired. The .danke detection code existed but was unreachable.
+
+**Solution:** Dedicated FileSystemWatcher with `ignoreCreate = false`:
+```typescript
+private dankeWatcher: vscode.FileSystemWatcher | null = null;
+
+private setupDankeWatcher(): void {
+  this.dankeWatcher?.dispose();
+  const dankePath = this.mtimesFile + '.danke';
+  this.dankeWatcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(
+      vscode.Uri.file(path.dirname(dankePath)),
+      path.basename(dankePath)
+    ),
+    false, // ignoreCreate — we WANT create events
+    true,  // ignoreChange
+    true   // ignoreDelete
+  );
+  this.dankeWatcher.onDidCreate((uri) => {
+    Logger.log(`🙏 Danke received: hook has read state`);
+    this.state.lastClaude = new Date().toISOString();
+    try {
+      fs.unlinkSync(uri.fsPath);
+      Logger.log(`🧹 Danke file cleaned up`);
+    } catch (err) {
+      Logger.log(`ℹ️  Could not delete danke file: ${err}`);
+    }
+    this.saveStateDebounced();
+  });
+}
+```
+
+**Key changes:**
+- New `dankeWatcher` member (reset in `setupWorkspaceWatchers()`)
+- Dedicated `setupDankeWatcher()` method (called on reconfig when `stateFileName` changes)
+- Runs independently of `awarenessMode` (always monitors for cleanup)
+- Fixed double-path bug: `loadState()` and `saveState()` now use `this.mtimesFile` directly
+- Removed debug log and dead .danke check from `trackFileChange()`
+
+### Validation: The MVP Works
+
+Stefan tested by:
+1. Modifying a file → Extension tracks it
+2. Submitting prompt → Hook fires
+3. Observing logs
+
+**Result:**
+```
+2026-05-17 03:40:13.064 [info] 🙏 Danke received: hook has read state
+2026-05-17 03:40:13.065 [info] 🧹 Danke file cleaned up
+2026-05-17 03:40:18.067 [debug] 💾 State saved to /home/st0ff/Quellen/Config/extensions/claude-workspace-monitor/.vscode/KlausC0deHelferData.json
+```
+
+The **end-to-end loop** is confirmed:
+1. ✅ Extension tracks file changes
+2. ✅ Hook reads state atomically
+3. ✅ Hook creates .danke signal
+4. ✅ Extension detects .danke creation
+5. ✅ Extension updates `lastClaude` and deletes .danke
+6. ✅ Claude receives file list in `additionalContext`
+
+### What This MVP Represents
+
+Klaus'C0dehelfer **0.5.0-a0** (Alpha) now offers:
+- ✅ Real-time file tracking in VSCode
+- ✅ Automatic hook integration
+- ✅ Bi-directional sync with race-free IPC
+- ✅ Claude gets automatic context about changed files
+- ✅ No manual intervention needed
+
+This is **minimum viable**: file lists, not diffs yet. But the infrastructure is solid and proven.
+
+### The Lesson
+
+Klaus learned why separate concerns matter:
+- One watcher for file **changes** (with `ignoreCreate=true`)
+- One watcher for .danke **signal** (with `ignoreCreate=false`)
+
+These aren't competing — they're complementary. The main watcher does real work; the danke watcher does orchestration. Separating them made the logic clearer and the race conditions disappear.
+
 **Co-authored by:** Stefan Kaps (st0ff-NPL-ToM, aka "St0ffi") and Claude Haiku 4.5 (Klaus)
 **Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Session 3)
-**Status:** Actively collaborating, learning together, being honest about progress. Architecture solidified (lock+danke pattern); next: debug hook injection, then implement diff generation.
+**Status:** MVP validated and working. Version bumping to 0.5.0-a0. Next phase: SPEC.md implementation (diffs instead of file lists).

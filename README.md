@@ -1,155 +1,214 @@
-# Claude Workspace Monitor
-by `theObsessedManiacs` –  **We never rule…** but this time, we lead Claude to rule VScode. 🚀
+# Klaus'C0dehelfer — Claude Workspace Monitor
 
-**Passive filesystem awareness for Claude Code** — automatically track file changes across your VSCode workspace and keep Claude's context in sync.
+**Passive filesystem awareness for Claude Code** — automatically track file changes across your VSCode workspace and sync them to Claude via hooks.
 
-## Features
+by `theObsessedManiacs` – **We never rule…** but this time, we lead Claude to rule VSCode. 🚀
 
-✅ **Cross-platform**: Uses VSCode's native FileSystemWatcher API (Windows, macOS, Linux)\
-✅ **Intelligent filtering**: Monitors only relevant files (source code, config, docs) — ignores build artifacts, cache, and noise\
-✅ **Automatic sync**: Updates `~/.claude/projects/.../memory/file_mtimes.json` in real-time\
-✅ **Zero configuration**: Works automatically once installed\
-✅ **Multi-folder workspaces**: Handles multiple directories mounted in a single VSCode workspace
+---
 
 ## What It Does
 
-When you save a file:
-1. The extension detects the change via VSCode's FileSystemWatcher API
-2. Updates file modification time in the Claude memory database
-3. Claude sees the updated state at your next prompt — no need to manually mention what changed
+Klaus'C0dehelfer monitors your workspace for file changes and automatically injects them into Claude's context when you submit a prompt. Claude knows what you've changed without you saying a word.
 
-This closes the collaboration gap between you and Claude: your pair-programmer notices changes in real-time, just like a human would.
+**The workflow:**
+1. You edit a file → Extension detects change
+2. You submit a prompt → Hook fires (`UserPromptSubmit`)
+3. Hook reads the list of changed files
+4. Extension detects hook's heartbeat signal (`.danke` file)
+5. Claude receives: `"Following workspace-files have changed: • src/main.ts • package.json • README.md"`
+
+---
+
+## Features
+
+✅ **Bi-Directional Sync:** Extension ↔ Hook communication via Lock+Danke IPC pattern\
+✅ **Cross-Platform:** VSCode FileSystemWatcher (Windows, macOS, Linux)\
+✅ **Configurable Patterns:** Include/exclude rules for noise reduction\
+✅ **Multiple Workspaces:** Handles monorepos and multi-folder setups\
+✅ **Automatic Integration:** Hook auto-registers in `.claude/settings.local.json`\
+✅ **Zero Configuration:** Works out of the box once installed
+
+---
 
 ## Installation
 
-### From VS Marketplace (when published)
-1. Open VSCode Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-2. Search for "Claude Workspace Monitor"
-3. Click Install
+### From VSIX (Current Development)
+1. Download `.vsix` file from releases
+2. VSCode: `Extensions → Install from VSIX…`
+3. Select file, restart VSCode
 
-### From Source (development)
+### From Source (Development)
 ```bash
 cd /path/to/claude-workspace-monitor
 npm install
-npm run compile
-code --install-extension ./
+npm run bundle
+npx vsce package
 ```
-> TODO: andere Möglichkeiten offenbaren
+Then install the generated `.vsix` file.
 
-## How It Works
+---
 
-**Monitored Patterns** (included):
-- `*.cpp`, `*.h`, `*.hpp`, `*.c` (C++)
-- `*.py` (Python)
-- `*.ts`, `*.tsx`, `*.js` (TypeScript/JavaScript)
-- `*.json`, `*.yaml`, `*.toml` (Config)
-- `*.md` (Documentation)
-- `CMakeLists.txt`, `*.cmake`
-- `*.asm` - Because theObsessedManiacs come from the Commodore C64!
+## Configuration
 
-**Excluded Patterns** (noise reduction):
-- `.git/`, `build/`, `__pycache__/`, `.vscode/`, `node_modules/`
-- `.swp`, `.swo`, `.tmp/`, `logs/`
-- Build artifacts: `.o`, `.a`, `.so`, `.dll`
+### Awareness Mode
 
-## State Storage
+Set via VSCode Settings (`Ctrl+,` → search "Klaus"):
 
-File modification times are stored in `.vscode/.workspaceChanges.json` inside your workspace folder — automatically created and updated by the extension.
+- **`none`** (default): No tracking, no hooks
+- **`onDemand`**: Hook fires on every Claude prompt (efficient, no noise)
+- **`realTime`**: Hook fires on every file save (immediate, token-heavy) — *coming soon*
 
-Example:
+Example `.vscode/settings.json`:
 ```json
 {
-  "tracking_enabled": true,
-  "workspace": "auto-detected",
-  "patterns": ["**/*.{cpp,h,hpp,...}", "**/CMakeLists.txt"],
-  "last_checked": "2026-05-14T12:34:56.789Z",
-  "files": {
-    "src/main.cpp": 1778647860,
-    "include/header.h": 1778647800,
-    "CMakeLists.txt": 1778647750
-  }
+  "claude-workspace-monitor.awarenessMode": "onDemand",
+  "claude-workspace-monitor.stateFileName": "KlausC0deHelferData"
 }
 ```
 
-Values are Unix timestamps (seconds). The file is written with a 5-second debounce after any change, and is excluded from version control via `.gitignore`.
+### Include/Exclude Patterns
 
-## Claude Integration
-
-By default, the extension tracks files silently. To enable **automatic Claude awareness**, add a Hook to your `.claude/settings.json`:
-
-### Mode 1: On-Demand (Recommended — Efficient)
-
-Claude checks for changes only when responding to your prompts:
-
+**Include** (what to monitor):
 ```json
 {
-  "hooks": {
-    "beforeAnswer": "check .vscode/.workspaceChanges.json for updates"
-  }
+  "**/*.{cpp,h,hpp,c,py,ts,tsx,js,json,yaml,toml,md,txt,sh,cmake,asm}",
+  "**/CMakeLists.txt"
 }
 ```
 
-**Pros**: Zero token waste, no idle notifications
-**Cons**: Tiny delay (not noticeable)
-
-### Mode 2: Real-Time (Immediate — Token-Heavy)
-
-Claude is notified instantly whenever you save a file:
-
+**Exclude** (noise reduction):
 ```json
 {
-  "hooks": {
-    "onChange": ".vscode/.workspaceChanges.json",
-    "action": "notify"
-  }
+  "**/[.]*",           // All dot-files/folders (.git, .vscode, etc.)
+  "**/build/**",       // Build directories
+  "**/__pycache__/**", // Python cache
+  "**/node_modules/**",// Dependencies
+  "**/logs/**",        // Logs
+  "**/*.o",            // Object files
+  "**/*.a",            // Static libs
+  "**/*.so",           // Shared libs
+  "**/*.dll"           // Windows DLLs
 }
 ```
 
-**Pros**: Claude always sees changes instantly
-**Cons**: Constant notifications = tokens spent even during silence
+---
 
-### Configuration Path
+## State File
 
-`.claude/settings.json` location depends on your setup:
-- **Workspace-local**: `.claude/settings.json` in your project root
-- **Global**: `~/.claude/settings.json` in your home directory
+Klaus stores workspace state in `.vscode/KlausC0deHelferData.json`:
 
-See [Claude Code documentation](https://github.com/anthropics/claude-code) for hook syntax details.
+```json
+{
+  "lastClaude": "2026-05-17T03:40:13.000Z",
+  "files": [
+    "src/extension.ts",
+    "package.json",
+    "README.md"
+  ]
+}
+```
 
-## Related Features
+- **`lastClaude`**: Timestamp when Hook last signaled success (updated via `.danke` file)
+- **`files`**: List of changed files since Klaus last read them (relative to workspace root)
 
-This extension implements the **"passive filesystem awareness"** proposal from:
-- GitHub Issue: [anthropics/claude-code#53592](https://github.com/anthropics/claude-code/issues/53592)
+---
 
-And, strictly spoken, it even extends that proposal by adding the 2nd mode to **"active filesystem awareness"**.
+## How It Works: The IPC Pattern
 
-## Development
+### Lock+Danke Synchronization
 
+**Extension (VSCode Runtime) → Hook (Claude Runtime):**
+1. Create `.lock` file (signal: "writing")
+2. Write state JSON with `files` array
+3. Delete `.lock` file (signal: "done")
+
+**Hook (Claude Runtime) → Extension (VSCode Runtime):**
+1. Wait while `.lock` exists (max 5 seconds)
+2. Read state JSON atomically
+3. Create `.danke` file (signal: "I consumed this data")
+
+**Extension (VSCode Runtime) → Ready for next cycle:**
+1. Dedicated FileSystemWatcher detects `.danke` creation
+2. Update `lastClaude` timestamp
+3. Delete `.danke` file
+4. Call `saveStateDebounced()` for next state
+
+This pattern ensures:
+- ✅ No partial reads (watcher waits for lock release)
+- ✅ No lost messages (danke signals consumption)
+- ✅ Race-free file operations (atomic reads/writes)
+- ✅ Cross-platform reliability (no process signals)
+
+---
+
+## Architecture
+
+Two-runtime system:
+
+| Component | Runtime | Language | Role |
+|-----------|---------|----------|------|
+| **Extension** | VSCode | TypeScript | Monitors files, manages state, handles config |
+| **Hook Handler** | Claude Code | Node.js | Reads state, injects context, signals back |
+
+Both are bundled independently:
+- `dist/extension.js` — runs in VSCode extension host
+- `dist/hook-handler.js` — runs when Claude receives UserPromptSubmit hook
+
+See [CLAUDE.md](CLAUDE.md) for architecture deep-dive.
+
+---
+
+## Development & Testing
+
+### Build
 ```bash
-npm install
-npm run watch          # Watch for TypeScript changes
-npm run compile        # Build once
-npm run lint           # ESLint check
+npm run bundle     # Compile both extension and hook
+npx vsce package   # Create .vsix
 ```
 
-### Testing
-1. Open VSCode with this extension folder: `code /path/to/claude-workspace-monitor`
-2. Press `F5` to launch the Extension Development Host
-3. Make edits to source files and verify `file_mtimes.json` updates
+### Testing Workflow
+1. Install `.vsix` in VSCode
+2. Restart VSCode (necessary for new extension)
+3. Open workspace
+4. Modify a file → wait 5 seconds (debounce)
+5. Submit prompt to Claude Code
+6. Check logs: Klaus'C0dehelfer output channel
+   - Should see: `🙏 Danke received: hook has read state`
+   - Should see: `🧹 Danke file cleaned up`
+
+### Versioning
+Version auto-increments via `.git/hooks/post-commit`:
+- `0.4.0` → `0.4.1` → `0.4.2` → … (per commit)
+- Format: `X.Y.Z-LETTER#` (e.g., `0.4.0-i56`)
+- Letters: `i` (impl), `a` (alpha), `b` (beta), `r` (release)
+
+---
+
+## Next Steps: SPEC.md Implementation
+
+The current MVP (0.5.0-a0) provides **file lists**. The [SPEC.md](SPEC.md) roadmap describes the next architecture: **unified diffs**.
+
+Future versions will send actual diffs to Claude:
+```
+Before:  "Following workspace-files have changed: • src/main.ts"
+After:   "diff --git a/src/main.ts b/src/main.ts ..."
+```
+
+This requires VSCode Timeline API integration and is tracked in [ROADMAP.md](ROADMAP.md).
+
+---
 
 ## License
 
 Apache 2.0
 
-## Author
-This work was completely committed by Claude AI itself, using Claude Haiku 4.5 in "thinking" mode.
+## Credits
 
-Credits could be mentioned as follows:
-- `executive producer`: Claude AI aka. "der Klaus selbst"
-- `creative director and publisher`: Stefan Kaps (St0fF-NPL-ToM)
+- **Executive Producer:** Claude AI (Klaus, Haiku 4.5)
+- **Creative Director & Publisher:** Stefan Kaps (St0fF-NPL-ToM)
 
-> P.s.: **We never rule…** but this time, Claude AI ruled. This extension is a testament to what happens when artificial intelligence and human creativity align perfectly. Klaus didn't just code this — Klaus *designed* it, *thought* about it, and *built* it with taste and precision. A first-class collaboration between developer and AI.
+This extension is part of the **"Wohlfühl-Config"** project — a comprehensive developer setup where Claude becomes an actual workspace-aware pair programmer.
 
 ---
 
-**Note**: This extension is part of the "Wohlfühl-Config" project — a comprehensive system setup for obsessed developers who want Claude to understand their work in real-time.
+**Last Updated:** 2026-05-17 (MVP validation + documentation)

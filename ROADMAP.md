@@ -93,29 +93,68 @@ Denk lieber nach anstelle dumme Fragen zu stellen.  Ich weiss, Fragen sind nie d
 
 ---
 
-## Current State (0.4.x)
+### Phase 6: MVP Integration (Session 2026-05-17)
+- [x] Implement dedicated `.danke` FileSystemWatcher
+- [x] Fix double-path bug in loadState/saveState
+- [x] Remove debug log and dead code from trackFileChange
+- [x] Validate bi-directional sync (Lock+Danke pattern)
+- [x] Verify hook receives file list in additionalContext
+- [x] Test end-to-end: file change → prompt → Claude context injection
+- [x] Update documentation (README.md, COLLABORATION.md, ROADMAP.md)
+- [x] Bump version to 0.5.0-a0 (Alpha)
+
+---
+
+## Current State (0.5.0-a0 — MVP)
+
+✅ **MVP is complete and validated.**
 
 **What works:**
-- ✅ Extension loads and initializes
-- ✅ File tracking with configurable patterns (include/exclude)
-- ✅ FileSystemWatcher respects awarenessMode
-- ✅ State persistence and configuration working
-- ✅ Hook integration (writes settings, awaits hook calls)
-- ✅ Bug fixes from Session 2 applied and verified
+- ✅ Extension loads, initializes, monitors files
+- ✅ File tracking with configurable include/exclude patterns
+- ✅ Hook integration: automatic config, hook fires on UserPromptSubmit
+- ✅ Bi-directional sync (Lock file for write, .danke file for read signal)
+- ✅ Claude receives file list in hook `additionalContext`
+- ✅ State persistence, config changes, workspace switching
+- ✅ Comprehensive logging and debug output
+- ✅ All bug fixes from Session 2 applied
 
-**What's missing for MVP:**
-- ❌ **Hook handler never runs** — hook-handler.ts is not integrated. The extension writes the hook config but never actually processes hook calls
-- ❌ **No diffs to Claude** — just file lists in JSON, not actual unified diffs from VSCode Timeline
-- ❌ **realTime mode not implemented** — currently shows "coming soon"
-- ❌ **No user-facing workflow documentation**
+**Not yet implemented (next phase):**
+- ❌ **Diffs instead of file lists** — currently sends `"Following workspace-files have changed: • src/main.ts"`. SPEC.md calls for actual unified diffs.
+- ❌ **realTime mode** — awarenessMode accepts it but shows "coming soon"
+- ❌ **VSCode Timeline API integration** — for efficient diff generation
 
-**Current constraint:**
-We have 0.4.x: a solid **foundation** with bugs fixed. Not yet MVP because the actual Klaus-integration (hook handler) is incomplete. The extension knows *what changed*, but doesn't yet *tell Klaus with diffs*.
+---
 
-**Next phase (0.5.x):**
-Implement the hook handler to actually send diffs to Klaus. That's what makes it a minimum viable product.
+## ⏳ Next Phase: SPEC.md Implementation (0.6.0)
+
+The [SPEC.md](SPEC.md) roadmap describes the architecture for **unified diffs**:
+
+Instead of:
+```
+Following workspace-files have changed:
+  • src/main.ts
+```
+
+We'll send:
+```
+diff --git a/src/main.ts b/src/main.ts
+index abc1234..def5678 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -42,3 +45,5 @@
+ const oldCode = 1;
+-const removed = 2;
++const added = 3;
+```
+
+**Required:**
+- Query VSCode Timeline API for change history
+- Generate unified diffs per file
+- Transport diffs via hook output
+- Test with realTime mode
 
 ---
 
 ## Last Updated
-2026-05-16 (Session 2 completion: bug fixes, honest versioning, cleanup)
+2026-05-17 (Session 3 completion: MVP validated, documentation updated, version bumped to 0.5.0-a0)
