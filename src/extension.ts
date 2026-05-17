@@ -191,6 +191,8 @@ export class ClaudeWorkspaceMonitor {
   }
 
   private trackFileChange(filePath: string): void {
+    Logger.debug(`[trackFileChange] filePath="${filePath}", mtimesFile="${this.mtimesFile}", expecting="${this.mtimesFile + '.danke'}"`);
+
     // Check for .danke file (bi-directional sync signal from hook)
     // VOR excluded-check, weil wir den exakten Pfad kennen
     if (filePath === this.mtimesFile + '.danke') {
