@@ -40,6 +40,7 @@ class Logger {
 export class ClaudeWorkspaceMonitor {
   private mtimesFile: string = '';
   private fileWatchers: vscode.FileSystemWatcher[] = [];
+  private dankeWatcher: vscode.FileSystemWatcher | null = null;
   private state: WorkspaceState = {
     lastClaude: new Date().toISOString(),
     files: [],
@@ -84,6 +85,7 @@ export class ClaudeWorkspaceMonitor {
         const oldPath = this.mtimesFile;
         this.mtimesFile = this.getMtimesPath();
         Logger.debug(`🔄 stateFileName changed: ${oldPath} → ${this.mtimesFile}`);
+        this.setupDankeWatcher();
       } else if (event.affectsConfiguration('claude-workspace-monitor.awarenessMode')) {
         handleAwarenessChange(event);
         const isActive = vscode.workspace.getConfiguration('claude-workspace-monitor').get('awarenessMode') !== 'none';
@@ -188,27 +190,38 @@ export class ClaudeWorkspaceMonitor {
     } else {
       Logger.log('🔇 Pause konfiguriert…');
     }
+
+    this.setupDankeWatcher();
   }
 
-  private trackFileChange(filePath: string): void {
-    Logger.debug(`[trackFileChange] filePath="${filePath}", mtimesFile="${this.mtimesFile}", expecting="${this.mtimesFile + '.danke'}"`);
+  private setupDankeWatcher(): void {
+    this.dankeWatcher?.dispose();
+    this.dankeWatcher = null;
 
-    // Check for .danke file (bi-directional sync signal from hook)
-    // VOR excluded-check, weil wir den exakten Pfad kennen
-    if (filePath === this.mtimesFile + '.danke') {
+    const dankePath = this.mtimesFile + '.danke';
+    this.dankeWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(
+        vscode.Uri.file(path.dirname(dankePath)),
+        path.basename(dankePath)
+      ),
+      false, // ignoreCreate — wir WOLLEN Create-Events
+      true,  // ignoreChange
+      true   // ignoreDelete
+    );
+    this.dankeWatcher.onDidCreate((uri) => {
       Logger.log(`🙏 Danke received: hook has read state`);
       this.state.lastClaude = new Date().toISOString();
-
-      // Cleanup: delete danke file for next cycle
       try {
-        fs.unlinkSync(filePath);
+        fs.unlinkSync(uri.fsPath);
         Logger.log(`🧹 Danke file cleaned up`);
       } catch (err) {
         Logger.log(`ℹ️  Could not delete danke file: ${err}`);
       }
-      return;
-    }
+      this.saveStateDebounced();
+    });
+  }
 
+  private trackFileChange(filePath: string): void {
     if (this.isExcluded(filePath)) {
       Logger.debug(`🚫 Excluded: ${filePath}`);
       return;
@@ -256,7 +269,7 @@ export class ClaudeWorkspaceMonitor {
 
   private loadState(): void {
     try {
-      const absolutePath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, this.mtimesFile);
+      const absolutePath = this.mtimesFile;
       if (fs.existsSync(absolutePath)) {
         const data = fs.readFileSync(absolutePath, 'utf-8');
         const parsed = JSON.parse(data);
@@ -286,7 +299,7 @@ export class ClaudeWorkspaceMonitor {
 
   private saveState(): void {
     try {
-      const absolutePath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, this.mtimesFile);
+      const absolutePath = this.mtimesFile;
       const lockPath = `${absolutePath}.lock`;
       const dir = path.dirname(absolutePath);
       if (!fs.existsSync(dir)) {
@@ -305,6 +318,7 @@ export class ClaudeWorkspaceMonitor {
 
   deactivate(): void {
     this.fileWatchers.forEach((w) => w.dispose());
+    this.dankeWatcher?.dispose();
     if (this.saveStateTimeout) {
       clearTimeout(this.saveStateTimeout);
     }

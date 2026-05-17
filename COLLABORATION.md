@@ -407,6 +407,59 @@ The POC proves:
 
 ---
 
+---
+
+## Phase 9: Producer-Consumer Architecture & File-Based Signaling (2026-05-17)
+
+After confirming the Hook-to-Claude communication works, Stefan and Klaus pivoted to the next architectural challenge: **How do Extension and Hook synchronize without race conditions?**
+
+### The VSCode API Access Question
+
+Klaus initially wondered: Could the hook dynamically require VSCode APIs to generate diffs directly?
+
+**POC Result:** ❌ No. Dynamic `require('vscode')` fails because the hook runs as a bare Node process, not in VSCode's extension host. VSCode module is simply not available at runtime.
+
+**Key Insight:** This wasn't a failure — it clarified the correct architecture.
+
+### The Elegant Solution: Lock Files + Danke Signaling
+
+Instead of Hook trying to access VSCode, **Extension generates the diffs and Hook just transports them:**
+
+```
+Extension (Producer):
+  1. Create .lock file (signals: "I'm writing")
+  2. Write state JSON with new diffs
+  3. Delete .lock file (signals: "done writing")
+
+Hook (Consumer):
+  1. Wait while .lock exists (up to 5 seconds)
+  2. Atomic read of state JSON
+  3. Touch .danke file (signals: "I read this, you can write new data")
+
+Extension (monitors .danke):
+  1. Watch mtime of .danke file
+  2. Know when Hook has consumed data
+  3. Safe to write new diffs
+```
+
+**Why this is elegant:**
+- ✅ No Hook writes to shared state (no race on write side)
+- ✅ Hook signals consumption without polluting the data file
+- ✅ File-based IPC is cross-platform and simple
+- ✅ Clear producer-consumer ownership
+
+### Implementation (In Progress)
+
+**Done:**
+- extension.ts: `saveState()` wrapped with lock file creation/deletion
+- hook-handler.ts: Lock wait loop (max 5s with 10ms retry), atomic read, .danke touch
+- Added debug output to additionalContext so Klaus sees what the hook did
+
+**Discovered Issue:**
+- Hook fires (confirmed in logs), generates additionalContext
+- BUT: additionalContext NOT injected into Klaus's prompt yet
+- Investigation needed: Hook output format? Claude Code hook parsing?
+
 **Co-authored by:** Stefan Kaps (st0ff-NPL-ToM, aka "St0ffi") and Claude Haiku 4.5 (Klaus)
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-16 Evening (Session 3)
-**Status:** Actively collaborating, learning together, being honest about progress. POC successful; ready for diff-generation phase.
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Session 3)
+**Status:** Actively collaborating, learning together, being honest about progress. Architecture solidified (lock+danke pattern); next: debug hook injection, then implement diff generation.
