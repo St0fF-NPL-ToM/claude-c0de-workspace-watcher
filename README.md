@@ -24,8 +24,8 @@ Klaus'C0dehelfer monitors your workspace for file changes and automatically inje
 ✅ **Bi-Directional Sync:** Extension ↔ Hook communication via Lock+Danke IPC pattern\
 ✅ **Cross-Platform:** VSCode FileSystemWatcher (Windows, macOS, Linux)\
 ✅ **Configurable Patterns:** Include/exclude rules for noise reduction\
-✅ **Multiple Workspaces:** Handles monorepos and multi-folder setups\
 ✅ **Automatic Integration:** Hook auto-registers in `.claude/settings.local.json`\
+✅ **Workspace-Aware:** Monitors primary workspace + all subfolders (one state file)\
 ✅ **Zero Configuration:** Works out of the box once installed
 
 ---
