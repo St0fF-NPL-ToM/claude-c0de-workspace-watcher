@@ -9,6 +9,7 @@ const GLOBAL_STATE_KEY_WORKSPACE = 'claudeHook.workspaceSettingsPath';
 
 interface WorkspaceState {
   lastClaude: string;
+  lastDanke?: string;
   files: string[];
 }
 
@@ -49,7 +50,8 @@ export class ClaudeWorkspaceMonitor {
     const config = vscode.workspace.getConfiguration('claude-workspace-monitor');
     const stem = config.get<string>('stateFileName') || 'KlausC0deHelferData';
     const filename = `${stem}.json`;
-    const result = path.join('.vscode', filename);
+    const workspaceRoot = vscode.workspace.workspaceFolders![0].uri.fsPath;
+    const result = path.join(workspaceRoot, '.vscode', filename);
     Logger.debug(`🗂️  getMtimesPath: ${stem} → ${result}`);
     return result;
   }
@@ -189,6 +191,22 @@ export class ClaudeWorkspaceMonitor {
   }
 
   private trackFileChange(filePath: string): void {
+    // Check for .danke file (bi-directional sync signal from hook)
+    // VOR excluded-check, weil wir den exakten Pfad kennen
+    if (filePath === this.mtimesFile + '.danke') {
+      Logger.log(`🙏 Danke received: hook has read state`);
+      this.state.lastClaude = new Date().toISOString();
+
+      // Cleanup: delete danke file for next cycle
+      try {
+        fs.unlinkSync(filePath);
+        Logger.log(`🧹 Danke file cleaned up`);
+      } catch (err) {
+        Logger.log(`ℹ️  Could not delete danke file: ${err}`);
+      }
+      return;
+    }
+
     if (this.isExcluded(filePath)) {
       Logger.debug(`🚫 Excluded: ${filePath}`);
       return;
