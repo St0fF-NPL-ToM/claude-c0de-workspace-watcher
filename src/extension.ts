@@ -211,6 +211,7 @@ export class ClaudeWorkspaceMonitor {
     this.dankeWatcher.onDidCreate((uri) => {
       Logger.log(`🙏 Danke received: hook has read state`);
       this.state.lastClaude = new Date().toISOString();
+      this.state.files = [];
       try {
         fs.unlinkSync(uri.fsPath);
         Logger.log(`🧹 Danke file cleaned up`);
@@ -362,7 +363,7 @@ async function handleAwarenessChange(event: vscode.ConfigurationChangeEvent): Pr
   Logger.debug(`⚙️  isGlobal=${isGlobal}, mode=${mode}`);
 
   if (mode === 'realTime') {
-    vscode.window.showInformationMessage("Real-Time mode: coming soon.");
+    vscode.window.showInformationMessage("Real-Time mode: coming maybe (validating agentic use case).");
     return;
   }
 

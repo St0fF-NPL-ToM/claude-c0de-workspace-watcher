@@ -32,19 +32,27 @@ Klaus'C0dehelfer monitors your workspace for file changes and automatically inje
 
 ## Installation
 
-### From VSIX (Current Development)
-1. Download `.vsix` file from releases
+### From Open Marketplace (Easiest)
+Once published to Open VSX / VS Marketplace:
+1. VSCode Extensions (`Ctrl+Shift+X`)
+2. Search "Klaus'C0dehelfer"
+3. Click Install
+
+### From Pre-Release VSIX
+1. Download `.vsix` from [GitHub Releases](https://github.com/the-Obsessed-Maniacs/claude-c0de-workspace-watcher/releases)
 2. VSCode: `Extensions → Install from VSIX…`
 3. Select file, restart VSCode
 
-### From Source (Development)
+### Build from Source
 ```bash
-cd /path/to/claude-workspace-monitor
+git clone https://github.com/the-Obsessed-Maniacs/claude-c0de-workspace-watcher
+cd claude-c0de-workspace-watcher
 npm install
 npm run bundle
 npx vsce package
+# Generates: claude-c0de-workspace-watcher-X.Y.Z-aB.vsix
 ```
-Then install the generated `.vsix` file.
+Install the generated `.vsix` via `Extensions → Install from VSIX…`
 
 ---
 
@@ -55,8 +63,8 @@ Then install the generated `.vsix` file.
 Set via VSCode Settings (`Ctrl+,` → search "Klaus"):
 
 - **`none`** (default): No tracking, no hooks
-- **`onDemand`**: Hook fires on every Claude prompt (efficient, no noise)
-- **`realTime`**: Hook fires on every file save (immediate, token-heavy) — *coming soon*
+- **`onDemand`**: Hook fires on every Claude prompt (efficient, no noise) ✅
+- **`realTime`**: Hook fires on every file save (immediate, token-heavy) — *coming maybe* (waiting to validate agentic use case)
 
 Example `.vscode/settings.json`:
 ```json
