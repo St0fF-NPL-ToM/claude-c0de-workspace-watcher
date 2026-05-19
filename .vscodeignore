@@ -10,3 +10,11 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 node_modules/
+CLAUDE.md
+.claude/**
+docs/**
+scripts/**
+images/Claude_AI_symbol.svg
+*.vsix
+CLAUDE.md
+package-lock.json

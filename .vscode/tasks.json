@@ -5,6 +5,15 @@
       "label": "npm: compile",
       "type": "npm",
       "script": "compile",
+      "presentation": {
+        "reveal": "silent"
+      },
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "npm: bundle (clean)",
+      "type": "npm",
+      "script": "bundle",
       "group": {
         "kind": "build",
         "isDefault": true
@@ -12,7 +21,16 @@
       "presentation": {
         "reveal": "silent"
       },
-      "problemMatcher": "$tsc"
+      "dependsOn": ["clean dist"]
+    },
+    {
+      "label": "clean dist",
+      "type": "shell",
+      "command": "rm",
+      "args": ["-rf", "dist/"],
+      "presentation": {
+        "reveal": "silent"
+      }
     }
   ]
 }

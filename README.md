@@ -15,7 +15,7 @@ Klaus'C0dehelfer monitors your workspace for file changes and automatically inje
 2. You submit a prompt → Hook fires (`UserPromptSubmit`)
 3. Hook reads the list of changed files
 4. Extension detects hook's heartbeat signal (`.danke` file)
-5. Claude receives: `"Following workspace-files have changed: • src/main.ts • package.json • README.md"`
+5. Claude Code receives an ephemeral hint containing which workspace files have changed since the previous prompt's point in time.
 
 ---
 
@@ -57,6 +57,16 @@ Install the generated `.vsix` via `Extensions → Install from VSIX…`
 ---
 
 ## Configuration
+
+⚠️ **Important: Global vs. Workspace Settings**
+
+Klaus'C0dehelfer should be configured at the **workspace level** (`.vscode/settings.json` in your project), not globally (VSCode user settings). Here's why:
+
+If Klaus programmers in a project where he's also editing files, he receives a hint with every prompt about which files *he* changed. This creates confusion: *"Did the user change these files, or did I? What's happening here?"* The feature works best for collaborative coding (pair programming) where one person edits and Claude observes. Avoid enabling it globally if you're also using Claude Code to write code in this project.
+
+**Recommendation:** Use workspace-level configuration (`awarenessMode: onDemand` in `.vscode/settings.json`), not user-level globals.
+
+---
 
 ### Awareness Mode
 
@@ -182,4 +192,4 @@ This extension is part of the **"Wohlfühl-Config"** project — a comprehensive
 
 ---
 
-**Last Updated:** 2026-05-17 (MVP validation + documentation)
+**Last Updated:** 2026-05-19 (Ephemeral context + GlobalSettings warning)

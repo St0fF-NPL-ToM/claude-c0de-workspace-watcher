@@ -37,7 +37,7 @@
   },
   "contributors": [
     {
-      "name": "Claude Haiku 4.5 (Anthropic) — initial implementation, because it is SMART!",
+      "name": "Klaus Haiku (Anthropic Claude HAIKU 4.5) — initial implementation, because he is SMART!",
       "url": "https://anthropic.com"
     }
   ],
@@ -48,14 +48,14 @@
   "contributes": {
     "commands": [
       {
-        "command": "claude-workspace-monitor.openSettings",
+        "command": "claude-c0de-workspace-watcher.openSettings",
         "title": "Klaus'C0dehelfer: Edit Settings"
       }
     ],
     "configuration": {
       "title": "Klaus'C0dehelfer",
       "properties": {
-        "claude-workspace-monitor.awarenessMode": {
+        "claude-c0de-workspace-watcher.awarenessMode": {
           "type": "string",
           "enum": [
             "none",
@@ -71,13 +71,13 @@
           "description": "Claude coworking awareness mode. Select 'On-Demand' or 'Real-Time' to enable and configure hooks.",
           "scope": "resource"
         },
-        "claude-workspace-monitor.stateFileName": {
+        "claude-c0de-workspace-watcher.stateFileName": {
           "type": "string",
           "default": "KlausC0deHelferData",
           "description": "Filename stem for workspace state tracking (without .json extension). E.g., 'KlausC0deHelferData' stores as '.vscode/KlausC0deHelferData.json'. The .json extension is automatically appended.",
           "scope": "resource"
         },
-        "claude-workspace-monitor.includePatterns": {
+        "claude-c0de-workspace-watcher.includePatterns": {
           "type": "array",
           "items": {
             "type": "string"
@@ -89,7 +89,7 @@
           "description": "Glob patterns for files to monitor.",
           "scope": "resource"
         },
-        "claude-workspace-monitor.excludePatterns": {
+        "claude-c0de-workspace-watcher.excludePatterns": {
           "type": "array",
           "items": {
             "type": "string"
@@ -114,17 +114,15 @@
   "scripts": {
     "vscode:prepublish": "npm run bundle",
     "bundle": "npm run bundle:ext && npm run bundle:hook",
-    "bundle:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --minify",
-    "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --minify",
+    "bundle:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --minify --sourcemap",
+    "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --minify --sourcemap",
     "compile": "tsc --noEmit",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src"
   },
-  "dependencies": {
-    "minimatch": "^9.0.3"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@types/minimatch": "^5.1.2",
+    "@tsconfig/bases": "^1.0.24",
     "@types/node": "^20.19.41",
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.9.1",

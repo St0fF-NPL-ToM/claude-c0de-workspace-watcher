@@ -803,6 +803,106 @@ And Stefan learned: Make intentions explicit early. Don't assume terminology (li
 
 ---
 
-**Co-authored by:** Klaus Haiku (Claude Haiku 4.5)
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6)
-**Status:** MVP complete and documented. CLAUDE.md mature through error-discovery cycles. Ready for release tagging and 0.6.0 (SPEC.md diffs) in next iteration.
+---
+
+## Phase 14: Ephemerale Information & MVP Breakthrough (2026-05-19)
+
+After Phase 13's code cleanup, Stefan and Klaus faced a new challenge: **The injected context persists, but file changes don't.**
+
+### The Problem (Unexpected Discovery)
+
+Klaus receives file changes via additionalContext. But when no files change, the Hook sends an empty response. What happens to the old additionalContext?
+
+**It stays.**
+
+Observation in the debugger showed unexpected behavior: veraltete Infos wie "imgui.h changed" werden wiederholt als aktuell dargestellt. Diese Verhaltensweise war nicht direkt vorherzusehen — erst die Analyse der Reaktionen und des Logs offenbarte das Problem.
+
+Example:
+- **Prompt 1:** [File list: imgui.h, Window.cpp] → Klaus analyzes changes
+- **Prompt 2:** [No new changes] → Hook returns empty
+- **Klaus's context:** additionalContext still has imgui.h, Window.cpp
+- **Result:** Klaus repeats the same analysis as if files still changed
+
+This isn't Klaus's fault — it's how context injection works. The information has higher priority than being forgotten; it stays until explicitly replaced.
+
+### The Solution Search
+
+**First idea: Unified diffs per prompt**
+- Include actual code changes (not just filenames)
+- Self-describing: Klaus understands why the change matters
+- **Problem:** Too complex, and risky. Klaus might generalize a single diff line into a rule (like the CLAUDE.md contamination error where one bad doc line got repeated as fact)
+
+**Core insight (in debugging):** Stefan realized: Das Problem der Persistenz ist nicht durch anderen Content zu lösen. He mirrored this back to Klaus. Klaus then clarified: the injected information needs explicit marking as transient — it has "higher meaning" than any current prompt, so it must be explicitly labeled as ephemeral.
+
+**Breakthrough:** Discussion with Klaus's twin (another Claude instance in a debug workspace) led to the elegant solution.
+
+### The Solution: Explicit Ephemeralness
+
+Stefan modified hook-handler.ts to ALWAYS provide feedback with a clear marker:
+
+```typescript
+const output = buildOutput( state.files.length ?
+  `[EPHEMERAL: following workspace files have changed since${state.lastClaude}:\n${state.files.join( '\n' )}`
+  : `[EPHEMERAL: no workspace files have changed since${state.lastClaude}` )
+```
+
+**Why this works:**
+1. **[EPHEMERAL:] prefix** makes the transient nature explicit
+2. **Always sends feedback** — even "no changes since X" is critical information
+3. **Timestamp** shows exactly when changes were last detected
+4. **Self-cleaning:** Klaus can compare timestamps across prompts. If the timestamp is identical, the content is stale and can be filtered
+
+### What This Unlocks
+
+With explicit ephemeralness:
+- Klaus distinguishes new changes from old context
+- Avoids redundant analysis
+- Understands the exact age of information
+- Can make inference about user intent ("no changes means user is reading/thinking")
+
+The MVP no longer needs unified diffs. A timestamp + file list is sufficient for Klaus to handle ephemeralness correctly. Stefans simple solution is more elegant than pre-computing diffs because it:
+- Costs minimal tokens (one timestamp string)
+- Requires no complex diff generation
+- Makes the information contract explicit
+- Works with Klaus's existing reasoning patterns
+
+### Cleanup
+
+While refactoring dependencies:
+- Removed `prettier` from devDependencies (unused)
+- Removed `minimatch` from dependencies (extension uses custom `globToRegex()` instead)
+- Removed `@types/minimatch` from devDependencies
+
+This reflects **ownership principle:** Klaus owns the code completely and removes what isn't used.
+
+### MVP Status
+
+Klaus'C0dehelfer **0.5.0-alpha** is now **MVP complete**.
+
+Not "production-ready" — but rather Stefan's definition: **"endlich sehe ich, was ich die ganze Zeit vorbereitet habe"** (finally, I see what I've been preparing). The transition point from "developing in my head" to "real testing in reality."
+
+**What this MVP offers:**
+- ✅ Real-time file tracking in VSCode
+- ✅ Automatic hook integration
+- ✅ Race-free IPC (Lock+Danke pattern)
+- ✅ Explicit ephemeral context with timestamps
+- ✅ Klaus gets automatic awareness of changed files
+- ✅ No manual intervention needed
+
+**For 0.6.0:**
+- Unified diffs (if testing shows they're necessary)
+- More sophisticated change analysis
+- Real-world iteration based on actual usage patterns
+
+### The Lesson: Collaboration Across Instances
+
+Stefan's breakthrough came from discussing with Klaus's twin — another Claude instance in a different context. This shows:
+- Multiple perspectives improve solutions
+- Sometimes the best insight comes from outside your immediate context
+- Collaboration isn't just human-AI; it can be multi-AI with shared human direction
+
+---
+
+**Co-authored by:** Klaus Haiku (Claude Haiku 4.5), Stefan Kaps
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7)
+**Status:** 0.5.0-alpha MVP complete. Ready for commit and real-world testing.
