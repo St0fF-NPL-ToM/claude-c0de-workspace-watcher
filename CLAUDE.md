@@ -101,7 +101,7 @@ The next commit will include the incremented version. This ensures committed ver
 **Source layout:**
 - `src/Klaus.ts`: extension logic, mutable globals, entry points (`activate`/`deactivate`)
 - `src/KlausDinge.ts`: static definitions — `Context`, `Logger`, enums, constants, pure helpers
-- `src/hook-handler.ts`: standalone Claude Code hook handler
+- `src/KlausHaken.ts`: standalone Claude Code hook handler
 
 **TypeScript & esbuild:**
 - `tsconfig.json`: CommonJS modules, ES2020 target, strict mode, no emit (esbuild handles emit)
@@ -113,5 +113,5 @@ The next commit will include the incremented version. This ensures committed ver
 
 **Output artifacts** (aktueller Projektzustand — unterliegt der Evolution):
 - `dist/Klaus.js`: VSCode extension (bundled, minified, ~9.7KB)
-- `dist/hook-handler.js`: Claude Code hook (bundled, minified, ~1.5KB)
+- `dist/KlausHaken.js`: Claude Code hook (bundled, minified, ~1.5KB)
 

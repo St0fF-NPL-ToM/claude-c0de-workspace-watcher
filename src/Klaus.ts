@@ -208,7 +208,7 @@ function getKlausKonfigZiel(): string
 
 function klausHookJSON( klaus: fs.PathLike )
 {
-    return { type: 'command', command: 'node', args: [ `${path.join( Context.path(), 'dist', 'hook-handler.js' )}`, klaus ] }
+    return { type: 'command', command: 'node', args: [ `${path.join( Context.path(), 'dist', 'KlausHaken.js' )}`, klaus ] }
 }
 
 function updateKlausHook( settingsFile: fs.PathLike, klaus: fs.PathLike, set: boolean )
