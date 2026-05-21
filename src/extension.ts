@@ -10,7 +10,26 @@ interface WorkspaceState
     lastClaude: string
     files: string[]
 }
-
+class CurrentConfig
+{
+    mode: string
+    file: string
+    incl: string[]
+    excl: string[]
+    public init: boolean = false
+    constructor ( c: vscode.ExtensionContext )
+    {
+        const cfg = vscode.workspace.getConfiguration( Context.extName() )
+        if ( cfg ) {
+            this.mode = cfg.get( Config.MODE, `` )
+            this.file = cfg.get( Config.FILE, `` )
+            this.incl = cfg.get( Config.INCL, [] )
+            this.excl = cfg.get( Config.EXCL, [] )
+        } else {
+            this.mode = ``; this.file = ``; this.incl = []; this.excl = []
+        }
+    }
+}
 // Globalisierung von Parametern / Strings / etc.
 const EXT_DEF_FILE = 'KlausC0deHelferData'
 const SCOPE_ICONS: string[] = [ `🌐`, `🏭` ]
@@ -97,7 +116,7 @@ const parseJSON = ( str: string ): any =>
 
 export class ClaudeWorkspaceMonitor
 {
-    private klausDatei: string = ''
+    private klaus
     private fileWatchers: vscode.FileSystemWatcher[] = [];
     private state: WorkspaceState = cleanStateNow()
     private saveStateTimeout: NodeJS.Timeout | null = null;
@@ -108,10 +127,12 @@ export class ClaudeWorkspaceMonitor
         Context.init( context )
         this.handleLegacyBugs()
         this.handleUpgrade()
-        // Registriere Callback → Handlung bei Config-Änderungen
-        vscode.workspace.onDidChangeConfiguration( () => { this.handleWorkspaceChange( undefined ) } )
+        // lies aus, was aktuell "gültig ist"
+        this.klaus = new CurrentConfig( context )
         // Registriere Callback → workspace-Wechsel
-        vscode.workspace.onDidChangeWorkspaceFolders( ( event ) => { this.handleWorkspaceChange( event ) } )
+        vscode.workspace.onDidChangeWorkspaceFolders( () => { this.handleWorkspaceChange() } )
+        // Registriere Callback → Handlung bei Config-Änderungen
+        vscode.workspace.onDidChangeConfiguration( ( event ) => { this.handleConfigChange( event ) } )
         // Nun können wir los legen … Ähm … nein, das macht VScode für uns.
     }
 
@@ -138,16 +159,13 @@ export class ClaudeWorkspaceMonitor
         return workspaceRoot
     }
 
-    private getKlausKonfigZiel( global: boolean ): string
+    private getKlausKonfigZiel(): string
     {
-        if ( global ) {
-            const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-            if ( homeDir )
-                return path.join( homeDir, '.claude', 'settings.json' )
-            else
-                Logger.debug( "⛔ Klaus'C0dehelfer: Could not determine home directory." )
-        }
-        return path.join( vscode.workspace.workspaceFolders![ 0 ].uri.fsPath, '.claude', 'settings.local.json' )
+        let base = vscode.workspace.workspaceFolders![ 0 ].uri.fsPath // Fallback.
+        if ( this.klaus.file.length )
+            // KlausDatei hat den Pfad schon bestimmt.  Von ${baseDir}/.vscode/klausfile zu baseDir:
+            base = path.dirname( path.dirname( this.klaus.file ) )
+        return path.join( base, '.claude', 'settings.local.json' )
     }
 
     private klausHookJSON( klaus: fs.PathLike )
@@ -188,7 +206,8 @@ export class ClaudeWorkspaceMonitor
             fs.writeFileSync( settingsFile, JSON.stringify( js, null, 2 ) )
             Logger.log( `✅ Hook ` + ( set ? `written to` : `cleared from` ) + ` ${settingsFile}` )
         } catch ( err ) {
-            Logger.log( `⛔ Hook update to ${settingsFile} FAILED!` )
+            if ( set )
+                Logger.log( `⛔ Hook setup to ${settingsFile} FAILED!` )
         }
     }
 
@@ -245,41 +264,61 @@ export class ClaudeWorkspaceMonitor
             Logger.log( `🆕 First run: initializing persistent storage` )
     }
 
-    private handleWorkspaceChange( event: undefined | vscode.WorkspaceFoldersChangeEvent ): void
+    private handleWorkspaceChange(): void
     {
-        Logger.debug( `🗹🗷 handleWorkspaceChange( ${event} )` )
+        Logger.debug( `🗹🗷 handleWorkspaceChange( ${vscode.workspace.name} )` )
 
         const newDatei = this.getKlausDateiName()
 
-        if ( newDatei ) {
-            this.klausDatei = newDatei
-
+        if ( newDatei ) {   // Informationen beschaffen
+            this.klaus.file = newDatei
             const mode = Context.active( Config.MODE )
-            if ( mode === 'none' ) {
-                this.state = cleanStateNow()
-            } else {
-                this.loadState()
-            }
-            const file = Context.active( Config.FILE )
             const isActive = mode !== 'none'
-            const isGlobal = Context.project( Config.MODE ) === undefined
+            const fromOverride = Context.project( Config.MODE ) === undefined
 
-            Logger.log( `📋 Workspace '${vscode.workspace.name}' selected: `
-                + AWARENESS_MODE_ICONS[ mode ] + SCOPE_ICONS[ isGlobal ? 0 : 1 ]
-                + `#${this.setupWatchers( isActive )}:${file}` )
-
-            if ( mode !== Context.project( Config.MODE ) ) {
-                if ( mode === 'none' ) {
-                    Logger.log( `⚠️  Klaus erhält KEINE Daten (Workspace deaktiviert, Folder="${Context.project( Config.MODE )}")!` )
-                } else {
-                    Logger.log( `⚠️  Klaus Daten werden VERSCHLUCKT (Folder deaktiviert, Workspace="${mode}")!` )
+            // Wenn der Nutzer kein Feedback für Klaus wünscht, sollte auch "altes Feedback"
+            if ( mode === 'none' ) this.state = cleanStateNow() // entfernt werden!
+            else this.loadState()
+            // Klaus (de)aktivieren…
+            this.updateKlausHook( this.getKlausKonfigZiel(), this.klaus.file, isActive )
+            // Watcher aktivieren
+            let wcnt = this.setupWatchers( isActive )
+            // Korrekte Ausgabe mit Warnung - sollte nur noch 1x erfolgen.
+            if ( !isActive || wcnt > ( vscode.workspace.workspaceFolders?.length || 1 ) ) {
+                Logger.log( `📋 Workspace '${vscode.workspace.name}' selected: `
+                    + AWARENESS_MODE_ICONS[ mode ] + SCOPE_ICONS[ fromOverride ? 0 : 1 ]
+                    + `#${wcnt}:${Context.active( Config.FILE )}` )
+                if ( mode !== Context.project( Config.MODE ) ) { // Warnung vor dem Hund
+                    if ( mode === 'none' )
+                        Logger.log( `⚠️  Klaus erhält KEINE Daten (Workspace deaktiviert, Folder="${Context.project( Config.MODE )}")!` )
+                    else
+                        Logger.log( `⚠️  Klaus Daten werden VERSCHLUCKT (Folder deaktiviert, Workspace="${mode}")!` )
                 }
-            }
+                this.klaus.init = true
+            } else Logger.debug( `📋 Workspace '${vscode.workspace.name}' reconfigured.` )
         } else {
-            this.klausDatei = ''
-            Logger.log( '😴 No workspace open ⇒ Klaus\'C0dehelfer inaktiv.' )
+            if ( this.klaus.file !== '' ) {
+                this.klaus.file = ''
+                Logger.log( `😴 No workspace open ⇒ Klaus\'C0dehelfer inaktiv.` )
+                this.klaus.init = true
+            }
         }
         this.dbgCfg()
+    }
+
+    private handleConfigChange( e: vscode.ConfigurationChangeEvent ): void
+    {
+        if ( e.affectsConfiguration( Config.INCL ) && this.klaus.incl !== Context.active( Config.INCL ) ) {
+            Logger.log( `🔁 Watchers need reconfiguration!` )
+            this.setupWatchers( Context.active( Config.MODE ) !== 'none' )
+        } else if ( ( e.affectsConfiguration( Config.MODE ) && this.klaus.mode !== Context.active( Config.MODE ) )
+            || ( e.affectsConfiguration( Config.FILE ) && this.klaus.file !== Context.active( Config.FILE ) )
+            || !this.klaus.init
+        ) {
+            if ( !this.klaus.init ) this.klaus.init = true
+            else Logger.log( `🔁 Configuration change detected!` )
+            this.handleWorkspaceChange()
+        } else Logger.debug( `🔄 unimportant Configuration change detected.` )
     }
 
     private makeWatcher( b: vscode.Uri, p: string, c: boolean ): vscode.FileSystemWatcher
@@ -303,7 +342,7 @@ export class ClaudeWorkspaceMonitor
                 watcher.onDidChange( ( uri ) => this.trackFileChange( uri.fsPath ) )
                 this.fileWatchers.push( watcher )
             } )
-            const danke = this.klausDatei + `.danke`
+            const danke = this.klaus.file + `.danke`
             const watcher = this.makeWatcher( vscode.Uri.file( path.dirname( danke ) ), path.basename( danke ), true )
             watcher.onDidCreate( ( uri ) => { this.dankeSchoen( uri ) } )
             this.fileWatchers.push( watcher )
@@ -318,19 +357,15 @@ export class ClaudeWorkspaceMonitor
 
     private dankeSchoen( uri: vscode.Uri ): void
     {
-        // Das ist der eigentliche Danke-Handler!
-        const fp = uri.fsPath
-        if ( path.extname( fp ) === '.danke' ) {
-            Logger.log( `🙏 Danke received: hook has read state…` )
-            this.state = cleanStateNow()
-            try {
-                fs.unlinkSync( fp )
-                Logger.debug( `🧹 Danke file cleaned up` )
-            } catch ( err ) {
-                Logger.debug( `ℹ️  Could not delete danke file: ${err}` )
-            }
-            this.saveStateDebounced()
+        Logger.log( `🙏 Danke received: hook has read state…` )
+        this.state = cleanStateNow()
+        try {
+            fs.unlinkSync( uri.fsPath )
+            Logger.debug( `🧹 Danke file cleaned up` )
+        } catch ( err ) {
+            Logger.debug( `ℹ️  Could not delete danke file: ${err}` )
         }
+        this.saveStateDebounced()
     }
 
     private trackFileChange( filePath: string ): void
@@ -367,8 +402,8 @@ export class ClaudeWorkspaceMonitor
         // Relative Pfade - relativ zum Workspace?
         const workspaceFolder = vscode.workspace.getWorkspaceFolder( vscode.Uri.file( filePath ) )
         if ( workspaceFolder ) return path.relative( workspaceFolder.uri.fsPath, filePath )
-        else {// try to make relative to vscode
-            const rp = path.relative( path.dirname( Context.get().globalStorageUri.fsPath ), filePath )
+        else if ( Context.get().storageUri ) { // try to make relative to workspace storage
+            const rp = path.relative( path.dirname( Context.get().storageUri!.fsPath ), filePath )
             if ( rp.length ) return rp
         }
         return filePath
@@ -376,7 +411,7 @@ export class ClaudeWorkspaceMonitor
 
     private loadState(): void
     {
-        const dat = this.klausDatei
+        const dat = this.klaus.file
         if ( dat.length )
             try {
                 if ( fs.existsSync( dat ) ) {
@@ -393,20 +428,20 @@ export class ClaudeWorkspaceMonitor
                 }
             } catch ( err ) {
                 this.state = cleanStateNow()
-                Logger.error( `⛔ Failed to load state: ${err}` )
+                Logger.error( `⛔ Failed to load state: ${err} → state reset to "now".` )
             }
         else Logger.log( `⛔ no state to load.` )
     }
 
     private saveStateDebounced(): void
     {
-        if ( !this.saveStateTimeout && this.klausDatei.length ) {
+        if ( !this.saveStateTimeout && this.klaus.file.length ) {
             try {
-                const dir = path.dirname( this.klausDatei )
+                const dir = path.dirname( this.klaus.file )
                 if ( !fs.existsSync( dir ) ) {
                     fs.mkdirSync( dir, { recursive: true } )
                 }
-                fs.writeFileSync( `${this.klausDatei}.lock`, '' )
+                fs.writeFileSync( `${this.klaus.file}.lock`, '' )
                 Logger.debug( `🔒 Lock set (debounce started)` )
             } catch ( err ) {
                 Logger.debug( `⚠️  Could not set lock on debounce: ${err}` )
@@ -419,7 +454,7 @@ export class ClaudeWorkspaceMonitor
     private saveState(): void
     {
         try {
-            const absolutePath = this.klausDatei
+            const absolutePath = this.klaus.file
             if ( absolutePath.length ) {
                 const lockPath = `${absolutePath}.lock`
                 const dir = path.dirname( absolutePath )
@@ -439,9 +474,7 @@ export class ClaudeWorkspaceMonitor
     deactivate(): void
     {
         this.fileWatchers.forEach( ( w ) => w.dispose() )
-        if ( this.saveStateTimeout ) {
-            clearTimeout( this.saveStateTimeout )
-        }
+        if ( this.saveStateTimeout ) clearTimeout( this.saveStateTimeout )
         this.saveState()
         Logger.log( '🔌 Klaus\'C0dehelfer deaktiviert…' )
     }
