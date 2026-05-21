@@ -1591,4 +1591,16 @@ Jede Datei erzählt selbst, was sie kann und wie sie es macht. Die Trennung zwis
 
 ---
 
-**Status:** 0.5.0-a11 — Split vollständig umgesetzt. Klaus.ts + KlausDinge.ts + KlausHaken.ts.
+### Versionsentscheidung: 0.5.1-a0
+
+Das Refactoring dieser Session ist kein Patch (keine Bug-Fixes) und kein Major-Feature (keine neuen Fähigkeiten) — aber die Architektur hat sich fundamental verändert. Deshalb Minor-Bump:
+
+- **0.5.0** blieb der Near-MVP mit Klaus's ursprünglichem Code
+- **0.5.1** ist die saubere, wartbare Basis — gleiche Funktionalität, bessere Struktur
+- **0.6.0** bleibt reserviert für Diffs
+
+Nach dem nächsten `git push` inkrementiert der pre-push Hook auf `0.5.1-a1`.
+
+---
+
+**Status:** 0.5.1-a0 — Split vollständig umgesetzt. Klaus.ts + KlausDinge.ts + KlausHaken.ts.
