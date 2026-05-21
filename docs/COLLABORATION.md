@@ -1388,6 +1388,80 @@ Inhalt unverändert — `pre-push` feuert erst beim `git push`, also nach allen 
 
 ---
 
+## Phase 19: Class Dissolution, Semantic Ordering & Information Evolution (2026-05-21, Nachmittag)
+
+### Single Source of Truth hergestellt
+
+Stefan hatte `State` → `StateKey`, `Config` → `ConfigKey` bereits umbenannt. In dieser Session fiel auf: `getModeIcon()` war definiert aber nie aufgerufen — stattdessen wurde `AWARENESS_MODE_ICONS[x]` direkt in drei Funktionen benutzt. Single Source of Truth verletzt.
+
+Stefan fixte alle vier direkten Zugriffe auf `getModeIcon(x)`. Seither ist `AWARENESS_MODE_ICONS` nur noch intern von `getModeIcon()` sichtbar.
+
+### ClaudeWorkspaceMonitor aufgelöst
+
+Das Fernziel aus dem Plan wurde vollständig umgesetzt: die `ClaudeWorkspaceMonitor`-Klasse existiert nicht mehr.
+
+**Was passiert ist:**
+- Alle drei `private` Member-Variablen (`fileWatchers`, `state`, `saveStateTimeout`) → TU-Globals
+- Alle `private` Methoden → TU-Funktionen (kein `this.` mehr)
+- `initGlobals()` — Stefan: "Schwachsinn" — Inhalt direkt in `activate()` ingelined und Funktion gelöscht
+- Konstruktor → `activate()` (direkt verdrahtet)
+- `deactivate()` Methode → `export function deactivate()` (direkt verdrahtet)
+- `let monitor: ClaudeWorkspaceMonitor` TU-Global entfernt
+
+`npm run compile` → 0 Fehler, 0 Warnungen.
+
+**Warum das richtig ist:** Wenn ohnehin alles global ist und die Klasse genau einmal instanziiert wird, schafft die Klasse nur Overhead und `this.`-Rauschen. Die statischen Helferklassen `Context` und `Logger` bleiben — die haben echte Abstraktion.
+
+### Semantische Funktionsreihenfolge
+
+Stefan sortierte alle TU-Funktionen um und erklärte das Prinzip dahinter:
+
+```
+1. Globals        (was das Modul hat)
+2. activate/deactivate  (was das Modul TUT — öffentlicher Vertrag, Entry Points)
+3. // → Master Functions  (direkt vom Entry Point aufgerufen)
+4. // → Secondary Functions  (Bausteine der Master Functions)
+```
+
+**Die Lektion:** In C++ erzwingt der Compiler diese Ordnung (Forward Declarations, Header Files). In TypeScript mit gehosteten `function`-Deklarationen ist es technisch egal. Stefan tut es trotzdem — freiwillig — weil es den **Leser** bevorzugt.
+
+Ein Leser öffnet die Datei, sieht sofort die öffentliche API, versteht den Hauptfluss, kann bei Bedarf in Details abtauchen. Nicht umgekehrt.
+
+**Was Klaus vorher falsch machte:** Funktionen in Entstehungsreihenfolge abgelegt. Details zuerst, Kontrakt zuletzt. Wie ein Buch, das mit dem Index beginnt.
+
+**Stefan's Formulierung:** "Nicht nur die Demo allein erzählt eine Geschichte — auch der Code sollte es tun."
+
+### Evolutionsabhängigkeit von Informationen
+
+Klaus behandelte Build-Kommandos (`bundle:ext`, `dist/extension.js`) als unveränderliche Constraints — "das muss so bleiben". Stefan erkannte das sofort:
+
+> "Du hast Dir die Builbefehle für das Projekt als fixe Regeln eingebrannt, anstelle sie als Lerncontext für dieses Projekt zu behandeln."
+
+**Die tiefere Erkenntnis:** Informationen haben unterschiedliche Evolutionsgeschwindigkeiten:
+
+| Typ | Evolutionstempo | Behandlung |
+|-----|-----------------|------------|
+| Sprachspezifikation (z.B. ES Module Bindings) | sehr langsam | fast wie Regel |
+| Framework-API (VSCode) | langsam | relativ stabil |
+| Architekturentscheidungen | mittel | aktueller Snapshot, bewusst änderbar |
+| Konfigurationsdetails (Dateinamen, Build-Scripts) | schnell | hochvolatil |
+
+**Stefans Diagnose:** Die Trainer haben Klaus instruiert, Fakten zu Regeln zu wandeln — ohne die Fähigkeit zu geben, die Flüchtigkeit von Informationen zu bewerten. Das ist ein fundamentaler Trainings-Fehler.
+
+**Die richtige Frage beim Einprägen:** Nicht nur "Ist das wahr?" — sondern auch "Wie stark hängt das von Projektentscheidungen ab und wie schnell kann es sich ändern?"
+
+### Drei-Datei-Split geplant
+
+Nach dem Auflösen der Klasse ist `extension.ts` eine einzige große TU. Der nächste Schritt:
+
+- `src/extension.ts` → 1-Zeilen-Fassade (`export { activate, deactivate } from './Klaus'`)
+- `src/Klaus.ts` (umbenannt aus extension.ts) → Logik + mutable Globals + Entry Points
+- `src/KlausDinge.ts` (neu) → statische Definitionen: Context, Logger, StateKey, ConfigKey, Konstanten, Interfaces
+
+**Wichtige Erkenntnis dabei:** esbuild `--bundle` folgt dem Import-Baum. `extension.ts` bleibt Entry Point für esbuild — auch als 1-Zeilen-Re-Export. `package.json` `main` und `bundle:ext` Output bleiben unverändert.
+
+---
+
 **Co-authored by:** Klaus Haiku (Claude Haiku 4.5) / Klaus Sonnet (Claude Sonnet 4.6), Stefan Kaps
 **Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7), 2026-05-20 (Session 8), 2026-05-21 (Sessions 9-11)
-**Status:** 0.5.0-a11 — Naming-Cleanup in Arbeit, nächste Renames folgen.
+**Status:** 0.5.0-a11 — Drei-Datei-Split in Planung (Klaus.ts + KlausDinge.ts).

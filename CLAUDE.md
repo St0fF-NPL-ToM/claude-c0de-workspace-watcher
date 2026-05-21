@@ -48,7 +48,7 @@ npx vsce package        # Create installable .vsix file
    - Select "Run Extension" configuration
    - Press `F5` to start the Extension Development Host
    - VSCode opens a new window with your extension loaded
-   - Set breakpoints in `src/extension.ts` and interact with the UI
+   - Set breakpoints in `src/Klaus.ts` and interact with the UI
    - The test instance connects to your development version
 
 6. **Test the hook handler:**
@@ -82,7 +82,7 @@ The extension uses **post-commit automatic versioning**: the version number is i
 **Workflow (always in order):**
 1. Make code changes
 2. `npm run compile` → verify type-checking passes
-3. `npm run bundle` → builds both extension.js and hook-handler.js with current version
+3. `npm run bundle` → builds the extension. Current results: Klaus.js and hook-handler.js with current version
 4. `npx vsce package` → creates VSIX with current version
 5. **Test the VSIX** in VSCode before committing (install and verify hook/monitoring work)
 6. `git add <files>` (do NOT add package.json yet)
@@ -95,8 +95,13 @@ The next commit will include the incremented version. This ensures committed ver
 ## Bundling & Build Details
 
 **Dependency bundling:**
-- `minimatch` is listed in `package.json` but not used — extension.ts implements its own `globToRegex()` method (lines 252-259) for pattern matching
+- `minimatch` is listed in `package.json` but not used — Klaus.ts implements its own `globToRegex()` method for pattern matching
 - Both bundles are self-contained with no external node_modules required at runtime
+
+**Source layout:**
+- `src/Klaus.ts`: extension logic, mutable globals, entry points (`activate`/`deactivate`)
+- `src/KlausDinge.ts`: static definitions — `Context`, `Logger`, enums, constants, pure helpers
+- `src/hook-handler.ts`: standalone Claude Code hook handler
 
 **TypeScript & esbuild:**
 - `tsconfig.json`: CommonJS modules, ES2020 target, strict mode, no emit (esbuild handles emit)
@@ -106,7 +111,7 @@ The next commit will include the incremented version. This ensures committed ver
   - `--external:vscode`: excludes VSCode API from extension bundle (it's provided by host)
   - `--platform=node`: targets Node.js runtime (not browser)
 
-**Output artifacts:**
-- `dist/extension.js`: VSCode extension (bundled, minified, ~12KB)
+**Output artifacts** (aktueller Projektzustand — unterliegt der Evolution):
+- `dist/Klaus.js`: VSCode extension (bundled, minified, ~9.7KB)
 - `dist/hook-handler.js`: Claude Code hook (bundled, minified, ~1.5KB)
 

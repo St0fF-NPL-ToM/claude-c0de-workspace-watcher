@@ -44,7 +44,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./dist/extension.js",
+  "main": "./dist/Klaus.js",
   "contributes": {
     "commands": [
       {
@@ -114,7 +114,7 @@
   "scripts": {
     "vscode:prepublish": "npm run bundle",
     "bundle": "npm run bundle:ext && npm run bundle:hook",
-    "bundle:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --minify --sourcemap",
+    "bundle:ext": "esbuild src/Klaus.ts --bundle --outfile=dist/Klaus.js --external:vscode --platform=node --minify --sourcemap",
     "bundle:hook": "esbuild src/hook-handler.ts --bundle --outfile=dist/hook-handler.js --platform=node --minify --sourcemap",
     "compile": "tsc --noEmit",
     "watch": "tsc -watch -p ./",
