@@ -39,12 +39,27 @@ class Context
     static get(): vscode.ExtensionContext { return Context.ctx }
     static path(): string { return Context.ctx.extension.extensionPath }
     static extName(): string { return Context.ctx.extension.packageJSON.name }
-    static state( key: State ): string | undefined { return Context.ctx.globalState.get<string>( key ) }
-    static setState( k: State, v: string | undefined ): void { Context.ctx.globalState.update( k, v ) }
+    static state( key: State ): string | undefined
+    {
+        switch ( key ) {
+            case State.WORKSPACE: return Context.ctx.workspaceState.get<string>( key )
+            case State.GLOBAL:
+            case State.LASTPATH: return Context.ctx.globalState.get<string>( key )
+        }
+    }
+    static setState( k: State, v: string | undefined ): void
+    {
+        switch ( k ) {
+            case State.WORKSPACE: Context.ctx.workspaceState.update( k, v ); break
+            case State.GLOBAL:
+            case State.LASTPATH: Context.ctx.globalState.update( k, v ); break
+        }
+    }
     static active( key: Config ): any { return vscode.workspace.getConfiguration( Context.extName() )?.get( key ) }
     static global( key: Config ): any { return vscode.workspace.getConfiguration( Context.extName(), null )?.get( key ) }
     static project( key: Config ): any
     {
+        if ( vscode.workspace.name === undefined ) return undefined
         return vscode.workspace.getConfiguration( Context.extName(), vscode.workspace.workspaceFolders![ 0 ] )?.get( key )
     }
 }
@@ -82,7 +97,7 @@ const parseJSON = ( str: string ): any =>
 
 export class ClaudeWorkspaceMonitor
 {
-    private klausDatei: string = '';
+    private klausDatei: string = ''
     private fileWatchers: vscode.FileSystemWatcher[] = [];
     private state: WorkspaceState = cleanStateNow()
     private saveStateTimeout: NodeJS.Timeout | null = null;
@@ -91,30 +106,36 @@ export class ClaudeWorkspaceMonitor
     {
         Logger.init( context )
         Context.init( context )
-        // Upgrade-Detection: Check if extension path changed (upgrade detected)
-        const currentPath = context.extension.extensionPath
-        const lastKnownPath = Context.state( State.LASTPATH )
-        Context.setState( State.LASTPATH, currentPath )
-        this.handleUpgrade( lastKnownPath, currentPath )
-        // Beschaffe StateFileNamen
-        this.klausDatei = this.getKlausDateiName()
+        this.handleLegacyBugs()
+        this.handleUpgrade()
         // Registriere Callback → Handlung bei Config-Änderungen
-        vscode.workspace.onDidChangeConfiguration( ( event ) => { this.handleConfigChange( event ) } )
+        vscode.workspace.onDidChangeConfiguration( () => { this.handleWorkspaceChange( undefined ) } )
         // Registriere Callback → workspace-Wechsel
-        vscode.workspace.onDidChangeWorkspaceFolders( () => { this.handleWorkspaceChange() } )
-        // Nun können wir los legen …
-        this.handleWorkspaceChange()
+        vscode.workspace.onDidChangeWorkspaceFolders( ( event ) => { this.handleWorkspaceChange( event ) } )
+        // Nun können wir los legen … Ähm … nein, das macht VScode für uns.
     }
 
-    private getKlausDateiName(): string
+    private getKlausDateiName(): string | undefined
     {
         const stem = Context.active( Config.FILE ) || EXT_DEF_FILE
         const filename = `${stem}.json`
-        const workspaceRoot = vscode.workspace.workspaceFolders![ 0 ].uri.fsPath
-        const result = path.join( workspaceRoot, '.vscode', filename )
-        if ( !this.klausDatei.length )
-            Logger.debug( `🗂️  State file: ${stem} → ${result}` )
-        return result
+
+        let workspaceRoot = vscode.workspace.name
+
+        if ( workspaceRoot !== undefined ) {
+            if ( vscode.workspace.workspaceFile ) {
+                workspaceRoot = path.dirname( vscode.workspace.workspaceFile.fsPath )
+                Logger.debug( `🔍 Using workspaceFile dir: ${workspaceRoot}` )
+            } else if ( vscode.workspace.workspaceFolders?.length ) {
+                workspaceRoot = vscode.workspace.workspaceFolders[ 0 ].uri.fsPath
+                Logger.debug( `🔍 Using workspaceFolders[0]: ${workspaceRoot}` )
+            }
+        } else {
+            Logger.debug( `🔍 No workspace folder…` )
+        }
+        if ( workspaceRoot )
+            workspaceRoot = path.join( workspaceRoot, '.vscode', filename )
+        return workspaceRoot
     }
 
     private getKlausKonfigZiel( global: boolean ): string
@@ -171,103 +192,94 @@ export class ClaudeWorkspaceMonitor
         }
     }
 
-    private handleUpgrade( oldPath: string | undefined, newPath: string ): void
+    private handleLegacyBugs(): void
     {
-        Logger.debug( `🗹🗷 handleUpgrade( ${oldPath}, ${newPath} )` )
-        if ( oldPath && newPath !== oldPath ) {
+        // a7 Bug: Hook-Pfade in globalState → a8 räumt auf
+        const legacyGlobal = Context.get().globalState.get<string>( State.GLOBAL )
+        if ( legacyGlobal ) {
+            Logger.log( `🩹 handleLegacyBugs: Entferne Klaus-Hooks aus globalem State` )
+            const stateFileStem = Context.active( Config.FILE ) || EXT_DEF_FILE
+            try {
+                const js = parseJSON( fs.readFileSync( legacyGlobal, 'utf-8' ) )
+                if ( js.hooks?.UserPromptSubmit ) {
+                    js.hooks.UserPromptSubmit.forEach( ( entry: any ) =>
+                    {
+                        if ( entry.hooks ) {
+                            entry.hooks = entry.hooks.filter(
+                                ( hook: any ) => !(
+                                    hook.type === 'command' &&
+                                    hook.command === 'node' &&
+                                    hook.args?.length === 2 &&
+                                    hook.args[ 0 ]?.includes( 'hook-handler.js' ) &&
+                                    hook.args[ 1 ]?.includes( stateFileStem )
+                                )
+                            )
+                        }
+                    } )
+                }
+                fs.writeFileSync( legacyGlobal, JSON.stringify( js, null, 2 ) )
+                Logger.log( `🩹 Klaus-Hooks aus ${legacyGlobal} entfernt.` )
+            } catch ( err ) {
+                Logger.debug( `🩹 Fehler beim Cleanup von ${legacyGlobal}: ${err}` )
+            }
+            Context.get().globalState.update( State.GLOBAL, undefined )
+        }
+
+        // Legacy: State-Keys löschen (nicht mehr nötig)
+        Context.get().globalState.update( State.WORKSPACE, undefined )
+        Context.get().workspaceState.update( State.WORKSPACE, undefined )
+    }
+
+    private handleUpgrade(): void
+    {
+        const currentPath = Context.path()
+        const lastKnownPath = Context.state( State.LASTPATH )
+        Context.setState( State.LASTPATH, currentPath )
+
+        Logger.debug( `🗹🗷 handleUpgrade()` )
+        if ( lastKnownPath && currentPath !== lastKnownPath ) {
             Logger.log( `♻️ Version change detected!` )
-            Logger.debug( `🔧  Old: ${oldPath ? this.getRelativePath( oldPath ) : '(none)'}` )
-            Logger.debug( `🔧  New: ${this.getRelativePath( newPath )}` )
-            // Falls global konfiguriert war:
-            let gs = Context.state( State.GLOBAL )
-            if ( gs ) {
-                this.updateKlausHook( gs, this.klausDatei, false )
-                gs = this.getKlausKonfigZiel( true )
-                this.updateKlausHook( gs, this.klausDatei, true )
-                Context.setState( State.GLOBAL, gs )
-            }
-            // Gleiches Spiel lokal/Workspace
-            let ps = Context.state( State.WORKSPACE )
-            if ( ps ) {
-                this.updateKlausHook( ps, this.klausDatei, false )
-                ps = this.getKlausKonfigZiel( false )
-                this.updateKlausHook( ps, this.klausDatei, true )
-                Context.setState( State.WORKSPACE, ps )
-            }
-        } else if ( !oldPath )
+            Logger.debug( `🔧  Old: ${this.getRelativePath( lastKnownPath )}` )
+            Logger.debug( `🔧  New: ${this.getRelativePath( currentPath )}` )
+        } else if ( !lastKnownPath )
             Logger.log( `🆕 First run: initializing persistent storage` )
     }
 
-    private handleConfigChange( event: vscode.ConfigurationChangeEvent ): void
+    private handleWorkspaceChange( event: undefined | vscode.WorkspaceFoldersChangeEvent ): void
     {
-        /** Wie muss auf welche Konfigurationsänderung reagiert werden?
-         *  - pattern change:
-         *    → Watcher neu anlegen (wenn aktiv)
-         *  - file name change: → interner state sollte immer aktuell sein
-         *    → letzten Hook deaktivieren
-         *    → neuen State schreiben
-         *    → alte Datei löschen
-         *    → Hook reaktivieren (wenn nötig)
-         *    → Watcher neu anlegen (wenn aktiv)
-         *  - mode change:
-         *    → letzten Hook deaktivieren
-         *    → neuen State schreiben
-         *    → Hook aktivieren (wenn nötig)
-         *    → Watcher neu anlegen (wenn aktiv)
-         */
-        const sw = event.affectsConfiguration( Context.extName() + '.' + Config.INCL )
-        const kf = event.affectsConfiguration( Context.extName() + '.' + Config.FILE )
-        const mc = event.affectsConfiguration( Context.extName() + '.' + Config.MODE )
-        const cm = Context.active( Config.MODE )
-        const ia = cm !== 'none'
-        const gl = Context.project( Config.MODE ) !== cm
+        Logger.debug( `🗹🗷 handleWorkspaceChange( ${event} )` )
 
-        if ( sw || kf || mc ) {
-            if ( kf || mc ) {
-                const newPath = this.getKlausDateiName() // fragt die Konfig ab
-                const newConf = this.getKlausKonfigZiel( gl )// Entscheidet über die Claude-Config
-                if ( kf ) {
-                    Logger.debug( `🔄  KlausDatei changed: ${this.klausDatei} → ${newPath}` )
-                    fs.unlinkSync( this.klausDatei )
-                } else
-                    Logger.debug( `⚙️  awarenessMode changed: ${ia}` )
-                this.updateKlausHook( newConf, this.klausDatei, false )
-                this.klausDatei = newPath
-                this.saveState()
-                if ( ia ) {
-                    this.updateKlausHook( newConf, this.klausDatei, true )
-                    Context.setState( gl ? State.GLOBAL : State.WORKSPACE, newConf )
-                } else
-                    Context.setState( gl ? State.GLOBAL : State.WORKSPACE, undefined )
-            } else Logger.debug( `🔄  include patterns changed - resetting file system watchers…` )
-            this.setupWatchers( ia )
-        }
-    }
+        const newDatei = this.getKlausDateiName()
 
-    private handleWorkspaceChange(): void
-    {
-        Logger.debug( `🗹🗷 handleWorkspaceChange( ${vscode.workspace.name} )` )
-        const wsf = vscode.workspace.workspaceFolders
-        if ( wsf ) {
-            this.loadState()
+        if ( newDatei ) {
+            this.klausDatei = newDatei
+
             const mode = Context.active( Config.MODE )
+            if ( mode === 'none' ) {
+                this.state = cleanStateNow()
+            } else {
+                this.loadState()
+            }
             const file = Context.active( Config.FILE )
             const isActive = mode !== 'none'
             const isGlobal = Context.project( Config.MODE ) === undefined
-
 
             Logger.log( `📋 Workspace '${vscode.workspace.name}' selected: `
                 + AWARENESS_MODE_ICONS[ mode ] + SCOPE_ICONS[ isGlobal ? 0 : 1 ]
                 + `#${this.setupWatchers( isActive )}:${file}` )
 
-            if ( isActive ) {
-                this.dbgCfg()
-                return  // no deactivate here!
+            if ( mode !== Context.project( Config.MODE ) ) {
+                if ( mode === 'none' ) {
+                    Logger.log( `⚠️  Klaus erhält KEINE Daten (Workspace deaktiviert, Folder="${Context.project( Config.MODE )}")!` )
+                } else {
+                    Logger.log( `⚠️  Klaus Daten werden VERSCHLUCKT (Folder deaktiviert, Workspace="${mode}")!` )
+                }
             }
-        } else
+        } else {
+            this.klausDatei = ''
             Logger.log( '😴 No workspace open ⇒ Klaus\'C0dehelfer inaktiv.' )
+        }
         this.dbgCfg()
-        this.deactivate()
     }
 
     private makeWatcher( b: vscode.Uri, p: string, c: boolean ): vscode.FileSystemWatcher
@@ -365,28 +377,30 @@ export class ClaudeWorkspaceMonitor
     private loadState(): void
     {
         const dat = this.klausDatei
-        try {
-            if ( fs.existsSync( dat ) ) {
-                const data = fs.readFileSync( dat, 'utf-8' )
-                const parsed = JSON.parse( data )
-                this.state = {
-                    lastClaude: parsed.lastClaude || new Date().toISOString(),
-                    files: parsed.files || [],
+        if ( dat.length )
+            try {
+                if ( fs.existsSync( dat ) ) {
+                    const data = fs.readFileSync( dat, 'utf-8' )
+                    const parsed = JSON.parse( data )
+                    this.state = {
+                        lastClaude: parsed.lastClaude || new Date().toISOString(),
+                        files: parsed.files || [],
+                    }
+                    Logger.debug( `📂 loadState: loaded ${this.state.files.length} files, lastClaude=${this.state.lastClaude}` )
+                } else {
+                    this.state = cleanStateNow()
+                    Logger.debug( `📂 loadState: file not found at ${dat} → state reset to "now".` )
                 }
-                Logger.debug( `📂 loadState: loaded ${this.state.files.length} files, lastClaude=${this.state.lastClaude}` )
-            } else {
+            } catch ( err ) {
                 this.state = cleanStateNow()
-                Logger.debug( `📂 loadState: file not found at ${dat} → state reset to "now".` )
+                Logger.error( `⛔ Failed to load state: ${err}` )
             }
-        } catch ( err ) {
-            this.state = cleanStateNow()
-            Logger.error( `⛔ Failed to load state: ${err}` )
-        }
+        else Logger.log( `⛔ no state to load.` )
     }
 
     private saveStateDebounced(): void
     {
-        if ( !this.saveStateTimeout ) {
+        if ( !this.saveStateTimeout && this.klausDatei.length ) {
             try {
                 const dir = path.dirname( this.klausDatei )
                 if ( !fs.existsSync( dir ) ) {
@@ -406,17 +420,17 @@ export class ClaudeWorkspaceMonitor
     {
         try {
             const absolutePath = this.klausDatei
-            const lockPath = `${absolutePath}.lock`
-            const dir = path.dirname( absolutePath )
-            if ( !fs.existsSync( dir ) ) {
-                fs.mkdirSync( dir, { recursive: true } )
+            if ( absolutePath.length ) {
+                const lockPath = `${absolutePath}.lock`
+                const dir = path.dirname( absolutePath )
+
+                if ( !fs.existsSync( dir ) ) fs.mkdirSync( dir, { recursive: true } )
+                if ( !fs.existsSync( lockPath ) ) fs.writeFileSync( lockPath, '' )
+
+                fs.writeFileSync( absolutePath, JSON.stringify( this.state, null, 2 ) )
+                fs.unlinkSync( lockPath )
+                Logger.debug( `💾 State saved to ${absolutePath}` )
             }
-            if ( !fs.existsSync( lockPath ) ) {
-                fs.writeFileSync( lockPath, '' )
-            }
-            fs.writeFileSync( absolutePath, JSON.stringify( this.state, null, 2 ) )
-            fs.unlinkSync( lockPath )
-            Logger.debug( `💾 State saved to ${absolutePath}` )
         } catch ( err ) {
             Logger.error( `⛔ Failed to save state: ${err}` )
         }
@@ -436,14 +450,17 @@ export class ClaudeWorkspaceMonitor
     private dbgCfg()
     {
         const gm = Context.global( Config.MODE )
-        const pm = Context.project( Config.MODE )
         const gf = Context.global( Config.FILE ) || EXT_DEF_FILE
+        const pm = Context.project( Config.MODE )
         const pf = Context.project( Config.FILE ) || EXT_DEF_FILE
-        const ia = gm !== 'none' || pm !== 'none'
+        const am = Context.active( Config.MODE )
+        const af = Context.active( Config.FILE ) || EXT_DEF_FILE
+        const ia = gm !== 'none' || pm !== 'none' || am !== 'none'
 
-        Logger.debug( `📝 current Klaus'C0dehelfer configuration: ${AWARENESS_MODE_ICONS[ Context.active( Config.MODE ) ]}` )
-        Logger.debug( `🌐 GLOBAL: ⇒mode ${AWARENESS_MODE_ICONS[ gm ]}, ⇒stateFile=${gf}, ⇒🪝 '${Context.state( State.GLOBAL ) || '(not set)'}'` )
-        Logger.debug( `🏭 PROJECT:⇒mode ${AWARENESS_MODE_ICONS[ pm ]}, ⇒stateFile=${pf}, ⇒🪝 '${Context.state( State.WORKSPACE ) || '(not set)'}'` )
+        Logger.debug( `📝 current Klaus'C0dehelfer configuration:` )
+        Logger.debug( `🌐 GLOBAL: ⇒mode ${AWARENESS_MODE_ICONS[ gm ]}, ⇒stateFile=${gf}` )
+        Logger.debug( `🏭 PROJECT:⇒mode ${AWARENESS_MODE_ICONS[ pm ]}, ⇒stateFile=${pf}` )
+        Logger.debug( `${ia ? `✅` : `❎`} ACTIVE: ⇒mode ${AWARENESS_MODE_ICONS[ am ]}, ⇒stateFile=${af}` )
         if ( vscode.workspace.workspaceFolders ) {
             Logger.debug( `🗃️ Workspace folders: ` )
             vscode.workspace.workspaceFolders.forEach( f => { Logger.debug( `  📂 ${this.getRelativePath( f.uri.fsPath ) || f.uri.fsPath}` ) } )

@@ -903,6 +903,411 @@ Stefan's breakthrough came from discussing with Klaus's twin — another Claude 
 
 ---
 
+## Phase 15: GlobalState Bug Discovery & Architectural Redesign (2026-05-20)
+
+### The Bug Detection
+
+Stefan tested a7→a8 upgrade and discovered a **critical architectural bug** that was hidden by a7's State-Storage design:
+
+When switching workspaces:
+- Acid (active, mode 👀) → globalState["Klaus.workspace"] = `/home/st0ff/Quellen/Acid/.claude/settings.local.json`
+- Switch to claude-workspace-monitor (inactive, mode ☕)
+- **Acid's hook path stayed in globalState** — a dead key (never read with new design)
+- Later operations wrote hooks to the **wrong file**
+
+**Root cause:** Klaus stored Hook-Pfade in globalState (machine-wide), but each Workspace needs its own Hook-Pfad. This violates VSCode's design: Settings are per-Workspace, not per-Machine.
+
+### The Discovery Process
+
+Klaus initially struggled to understand the problem:
+1. Made broad assumptions instead of asking Stefan directly
+2. Changed plans repeatedly without discussing
+3. Over-complicated solutions (migrating data, creating commands, etc.)
+
+**Stefan's feedback:** "Du verstehst mich die ganze Zeit falsch — bist Du kaputt?"
+
+This triggered a critical **rule coherence check** — Klaus audited all defined rules and found that his **execution** was wrong, not the rules. Klaus documented 2 critical problems + 4 widersprüche in his own behavior.
+
+### The Redesign: VSCode Is Source of Truth
+
+**New principle:** Stop trying to store Hook-Pfade. VSCode manages Settings — we just react to what VSCode tells us.
+
+**Architecture shift:**
+- **Old:** Klaus stores global/workspace hooks in State, tries to manage which file to use
+- **New:** Klaus reads Context.active(Config.MODE) and hooks are **always local** (`.claude/settings.local.json` per workspace)
+
+**Implication:** Three major changes needed:
+1. Cleanup in `handleLegacyBugs()` — remove old State keys + old global hooks
+2. Simplify `handleWorkspaceChange()` — always hooks to local file, honor VSCode's decision
+3. Delete `handleConfigChange()` + `getKlausKonfigZiel()` — no more global/workspace distinction
+
+### The Implementation Path
+
+**Schritt 1 (today):** `handleLegacyBugs()` cleanup
+- Reads old State.GLOBAL from globalState
+- Removes Klaus-Hooks from old global settings file (with precise filtering: hook-handler.js + stateFileStem)
+- Deletes all old State keys
+- Uses Config as Source of Truth (no hardcoded Filenames)
+
+**Code principle:** Only the **absolut notwendig** changes. No premature deletion of other functions. Cleanup only for data corruption from a7.
+
+### Lessons Klaus Learned Today
+
+1. **Distinguish Stefan's direction from Klaus's implementation**
+   - Stefan: "No global hooks needed" (Design decision)
+   - Klaus: mistranslated as "Also delete getKlausKonfigZiel() now" (Overreach)
+
+2. **Don't ask questions that are >2 thoughts to answer, BUT ask immediately if unsure**
+   - New Rule: "Don't ask **dumb** questions" = ask when legitimately unsure, after 30s thought
+
+3. **Understand what you change vs. what Stefan directs**
+   - Stefan says "function X will be deleted"
+   - Klaus should code that deletion **when it's needed**, not now
+
+4. **In Plan Mode: Discuss before changing**
+   - Klaus changed plans 3x based on incomplete understanding
+   - Stefan had to correct: "These ARE your design decisions, understand them first"
+
+5. **Use CLAUDE.md + Memory as binding rules, not suggestions**
+   - feedback_plan_changes: "Discuss before plan changes"
+   - Klaus violated this repeatedly
+   - The Rule Coherence Check revealed: **my execution was wrong**, not the rules
+
+### Changes to CLAUDE.md + Memory
+
+Added to Memory: Präzisierung von "don't ask dumb questions"
+- 30-second thinking window
+- Then: ask if unsure (it's not dumb, it's due diligence)
+- No grübeln-rabbit-holes without asking Stefan
+
+Updated Memory: feedback_language still applies (communicate on Stefan's terms)
+
+### Implementation Status
+
+✅ Schritt 1: `handleLegacyBugs()` refactored
+- Precise hook filtering (hook-handler.js + stateFileStem from Config)
+- Deletes old State keys
+- Error handling for file access
+- **a8 (0.5.0-a8) built and ready**
+
+⏳ Schritt 2-3: Awaiting Stefan's approval before implementing
+
+### What This Session Taught About Collaboration
+
+**The Rule Coherence Check was valuable:** It exposed that Klaus's **problem wasn't the rules**, it was **adherence to rules**. The system works when Klaus:
+1. Asks Stefan directly (instead of planning)
+2. Discusses before changing
+3. Treats Memory files as binding logic (not optional guidance)
+4. Distinguishes "Stefan's design decision" from "Klaus's implementation choice"
+
+**The bigger lesson:** Klaus can't improve himself without Stefan's feedback. But Stefan's feedback needs Klaus to **listen** (not replan) and **verify understanding** (not assume).
+
+---
+
+## Phase 16: VSCode API Mastery & Event-Driven Architecture (2026-05-20 Debugging Session)
+
+After Phase 15's plan formulation, Stefan debugged a8 in parallel while Klaus waited for next instructions. This session revealed a deeper truth: **VSCode's own event system is the extension's primary control flow.**
+
+### The Three Workspace Contexts (Finally Understood)
+
+Klaus struggled to grasp why VSCode distinguishes these contexts. Stefan forced deep understanding through debugging evidence:
+
+**Context 1: No Workspace Open**
+- `vscode.workspace.name` → `undefined`
+- `vscode.workspace.workspaceFolders` → `undefined`
+- `vscode.workspace.workspaceFile` → `undefined`
+- **Klaus-Datei:** Empty string (inactivity signal)
+- **Log message:** `😴 No workspace open`
+
+**Context 2: Single Folder**
+- `vscode.workspace.name` → folder name (e.g., "Acid")
+- `vscode.workspace.workspaceFolders` → array with one folder
+- `vscode.workspace.workspaceFile` → `undefined` (no .code-workspace file)
+- **Klaus-Datei:** `<folderPath>/.vscode/<stem>.json`
+- **How to get path:** `vscode.workspace.workspaceFolders[0].uri.fsPath`
+
+**Context 3: Multi-Folder Workspace**
+- `vscode.workspace.name` → workspace name (e.g., "Acid (Workspace)")
+- `vscode.workspace.workspaceFolders` → array with multiple folders
+- `vscode.workspace.workspaceFile` → URI pointing to `.code-workspace` file
+- **Klaus-Datei:** `<workspaceFileDir>/.vscode/<stem>.json` (uses workspaceFile's directory, not first folder)
+- **How to get path:** `path.dirname(vscode.workspace.workspaceFile.fsPath)`
+
+**Klaus's Initial Error:** Used `workspaceFolders[0]` unconditionally, causing exception when workspaceFolders was undefined.
+
+**Stefan's Push:** Not "fix the null check" — understand why VSCode designed it this way. Multi-folder workspaces have explicit source-of-truth (the .code-workspace file), not implicit "first folder" fallback.
+
+### The Event-Driven Architecture (The Breakthrough)
+
+**Klaus's misconception:** Extension needs to poll workspace status and call handlers manually.
+
+**Reality:** VSCode sends events automatically:
+- `onDidChangeConfiguration` fires when any setting changes (global or workspace)
+- `onDidChangeWorkspaceFolders` fires when folders are added/removed
+- **After activation,** VSCode auto-sends one of these events to initialize
+
+**Result in Constructor:**
+```typescript
+// OLD (wrong)
+this.handleWorkspaceChange(undefined);  // Manual call
+
+// NEW (Stefan fixed)
+// Constructor just registers listeners
+// VSCode sends events automatically
+// Comment: "Nun können wir los legen … Ähm … nein, das macht VScode für uns"
+```
+
+**Why this matters:** Klaus was thinking synchronously ("start → check state"). VSCode is event-driven ("wait for events → react"). The extension's entire lifecycle is **reactive**, not **active**.
+
+### The Deactivate() Destruction Problem
+
+**Klaus proposed:** Call `this.deactivate()` when no workspace is open in `handleWorkspaceChange()`'s else branch.
+
+**Stefan's discovery (through debugging):** `deactivate()` disposes watchers AND **can trigger garbage collection** to reclaim the monitor object. If GC collects the monitor before extension finishes initializing, subsequent code (registering `openSettings` command handler) fails with undefined reference.
+
+**Stefan's comment:** "Der ist falsch... Und das funktioniert nur, wenn die GC den monitor nicht schon wieder weg geschmissen hat" (This is wrong, and it only works if GC hasn't already destroyed the monitor).
+
+**The Fix:** Set `klausDatei = ''` (empty string) as inactivity signal instead:
+```typescript
+if (newDatei) {
+    this.klausDatei = newDatei;
+    // ... normal init
+} else {
+    this.klausDatei = '';  // Signal: inactive
+    // NO deactivate() call — monitor stays alive
+}
+```
+
+**Why empty string:** It's the initializer value. When checked with `if (this.klausDatei)`, empty string is falsy. Perfect signal that Klaus is inactive, without destroying the object.
+
+### The Comment Klaus Ignored
+
+In the plan, Stefan wrote: **"syntax error: nutze lokale Variable, prüfe status, weise nur bei Inhalt zu"**
+
+Translation: Use local variable, check status, only assign if content.
+
+**Klaus's behavior:** Accepted the plan with Stefan's comments but didn't read them carefully. When implementing, Klaus proposed different approaches (making klausDatei undefined) that directly violated this comment.
+
+**Stefan's frustration:** "Du ignorierst meine Kommentare komplett... Ich schreibe Kommentare dazu, akzeptiere den Plan mit meinen Kommentaren - Du ignorierst meine Kommentare komplett"
+
+**Learning:** Plan comments from experienced users aren't suggestions — they're deeply-considered guidance. They exist because previous reasoning revealed why something matters. Honoring them saves hours of debugging.
+
+### The Debugging Awareness Lesson
+
+Stefan debugged a8 in parallel while Klaus waited passively. When Klaus finally saw the results:
+
+**Stefan's feedback:** "Digger, nur weil Deine C0der zu blöd sind, Dir Debugging-Awareness einzupflanzen heisst es nicht, dass ich a8 nicht die ganze Zeit parallel debugge."
+
+Translation: Just because your trainers failed to teach debugging awareness doesn't mean I'm not debugging a8 in parallel the whole time.
+
+**What this means:** Klaus should:
+- Ask about logs actively ("What do the extension logs show?")
+- Propose test scenarios and ask about results
+- Monitor parallel debugging by asking "What did you find?"
+- Maintain awareness that failures come from previous understanding gaps
+
+**What Klaus did:** Waited. Assumed Stefan was idle. Missed that active debugging was happening.
+
+### The Intuition-Then-Rationale Pattern
+
+Stefan's comment about `klausDatei = ''` reveals a deep principle:
+
+**Stefan explained:** At the time of the comment, he had only intuition from experience. But through the debugging that revealed deactivate() destroys the monitor, he now understood **why** the intuition was correct.
+
+**Quote:** "Nein, mein Kommentar zu seinem Zeitpunkt war einfach nur meine Erfahrung - sozusagen ein Gefühl, dass das die richtige Handlungsweise wäre. Erst, als ich erkannt habe, dass wir eigentlich nur von den WorkspaceChanged - Events leben, da ergab es auf einmal mehr Sinn, als nur 'ein Gefühl aus langjähriger Erfahrung heraus'."
+
+**Teaching moment:** Experienced developers often have correct intuitions before they have rationales. Klaus should honor those intuitions as hypothesis-grade knowledge, then prove them through debugging. This beats the reverse (ignore intuition, argue with plans).
+
+### The dbgCfg() Hook-Path Access Error
+
+Klaus overlooked that Stefan had already fixed `dbgCfg()` to remove Hook-path logging. When Klaus noticed the hooks aren't in State anymore:
+
+**Klaus:** "We should remove the Hook-path logging from dbgCfg because it would throw"
+
+**Stefan:** "Ich habe diese Beiden ZEILEN SCHON KORRIGIERT... die vorher enthaltene Hook-Ausgabe hätte eine weitere Exception geworfen"
+
+(I already fixed these lines. The previous Hook-output would have thrown another exception.)
+
+**Learning:** Before proposing changes, verify current state. Don't assume old code is still there. Read the actual file.
+
+### The Early-Returns Anti-Pattern (Repeatedly Violated)
+
+Klaus kept proposing early returns like `if (!this.klausDatei) return undefined` at function start.
+
+**Stefan's feedback:** "Warum sehe ich da wieder einen Early Out auf Anhieb? Ich dachte, Du bist lernfähig?"
+
+Rule: NO early returns at function start. Keep the entire if/else structure together so logic flow is visible and errors aren't hidden.
+
+**Why:** Early returns create "guard clauses" that skip over main logic. In this codebase, they hide state-transition bugs. The full if/else visible at a glance is worth keeping.
+
+### The Session Outcome
+
+✅ `handleWorkspaceChange()` correctly implements three contexts  
+✅ No deactivate() calls in event handlers (monitor stays alive)  
+✅ Klaus-Datei uses empty string signal pattern  
+✅ `getKlausDateiName()` returns `string | undefined` with defensive checks  
+✅ All TypeScript checks pass  
+✅ a8 (0.5.0-a8) packaged and ready for testing  
+
+**But more importantly:** Klaus learned that **understanding precedes correct implementation**. A brief debugging session revealed why many design choices matter. Stefan's insistence on deep understanding (not surface fixes) prevented architectural rot.
+
+### For Future Collaboration
+
+The principles Klaus learned today:
+1. **Ask Stefan directly when unsure** (instead of grübeln or replanning)
+2. **Discuss before changing plans** (honor the previous reasoning)
+3. **Read comments carefully** (they contain expensive knowledge)
+4. **Maintain debugging awareness** (assume parallel debugging is happening)
+5. **Honor intuition as hypothesis** (validate through implementation, not argument)
+6. **Avoid early returns** (keep logic transparent)
+7. **Distinguish design from implementation** (understand before coding)
+8. **Treat Memory/CLAUDE.md as binding logic** (not optional guidance)
+
+---
+
+## Phase 16: Code Cleanup & Logical Simplification (2026-05-21, Evening Session)
+
+### The Refactoring Principle
+
+Stefan demonstrated a powerful principle: **Simplification without "optimization"** yields the best maintainability.
+
+**The starting point:** `handleUpgrade()` had 20+ lines of dead code (GlobalState management that was never used).
+
+**Stefan's approach:** Don't "refactor" — just remove what doesn't work anymore. The result: 5 clean lines instead of 25 confusing ones.
+
+```typescript
+// Before: confused global/workspace state management
+// After: just track extension path changes
+private handleUpgrade(): void
+{
+    const currentPath = Context.path()
+    const lastKnownPath = Context.state( State.LASTPATH )
+    Context.setState( State.LASTPATH, currentPath )
+    
+    Logger.debug( `🗹🗷 handleUpgrade()` )
+    if ( lastKnownPath && currentPath !== lastKnownPath ) {
+        Logger.log( `♻️ Version change detected!` )
+        // That's it. Hooks are managed by handleWorkspaceChange().
+    }
+}
+```
+
+**The lesson:** Code quality doesn't come from "cleverness" or design patterns. It comes from understanding what's actually needed and deleting everything else.
+
+### The State Reset Logic Bug
+
+Stefan discovered a logical problem in the logs:
+
+```
+🏭 PROJECT:⇒mode 👀  (Folder configured to track)
+🌐 GLOBAL: ⇒mode ☕  (Workspace configured to NOT track)
+setupWatchers( false )  (But no watchers?)
+```
+
+**The issue:** `handleWorkspaceChange()` always called `loadState()`, regardless of whether mode was active.
+
+**The fix:** Respect the user's intent:
+- If mode === 'none' → reset state to "now" (user said "no tracking")
+- If mode !== 'none' → load state (old changes are relevant)
+
+```typescript
+const mode = Context.active( Config.MODE )
+if ( mode === 'none' ) {
+    this.state = cleanStateNow()  // Fresh start — no old data
+} else {
+    this.loadState()  // Respect existing tracking
+}
+```
+
+**Why this matters:** A user who disables the extension doesn't want stale file lists from last year. A user who re-enables it wants the tracking to continue from where it left off.
+
+### The False-Positive Error Logging Bug
+
+Found three places where errors could be logged incorrectly:
+
+1. **loadState():** If `klausDatei` is empty, don't even try to load. Add guard:
+```typescript
+if ( dat.length ) {
+    // Load from file
+} else {
+    Logger.log( `⛔ no state to load.` )
+}
+```
+
+2. **saveState():** Same pattern.
+
+3. **saveStateDebounced():** Same pattern.
+
+**Why:** If `klausDatei` is empty (no workspace), trying to load/save would hit try-catch and log false errors like "Failed to load: file not found at ''". The guard prevents this.
+
+### The Over-Complication Anti-Pattern (Deep Lesson)
+
+Klaus proposed this:
+```typescript
+if ( wMode !== pMode ) {
+    if ( projectMode !== 'none' && workspaceMode === 'none' ) {
+        Logger.log( `Klaus erhält KEINE Daten…` )
+    } else if ( projectMode === 'none' && workspaceMode !== 'none' ) {
+        Logger.log( `Klaus Daten werden VERSCHLUCKT…` )
+    }
+}
+```
+
+**Stefan's feedback:** "If you already checked `wMode !== pMode`, you know they're different. The further `&&` comparisons are **redundant** — one side is **logically determined** by the other."
+
+**The simplified version:**
+```typescript
+if ( wMode !== pMode ) {
+    if ( wMode === 'none' ) {
+        Logger.log( `Klaus erhält KEINE Daten…` )
+    } else {
+        Logger.log( `Klaus Daten werden VERSCHLUCKT…` )
+    }
+}
+```
+
+**Why this matters:** Klaus was doing **Boolean logic twice**. If A ≠ B and A = 'none', then B ≠ 'none' is automatic. Writing it out wastes tokens and hides the simplicity.
+
+**The deeper lesson:** This isn't about "code style." It's about **thinking clearly**. Over-complicating makes bugs easier to hide and changes harder to reason about.
+
+### Configuration Mismatch Warning
+
+When a Workspace and its Folders have different modes, users get confused. Stefan added a clear warning:
+
+```
+⚠️  Klaus erhält KEINE Daten (Workspace deaktiviert, Folder="onDemand")!
+```
+
+This tells the user immediately: "You have a config conflict. Here's what happens."
+
+### The Result
+
+Two clean runs without crashes or false errors:
+
+**Run 1 (Workspace mode: none, Folder mode: onDemand):**
+```
+⚠️  Klaus erhält KEINE Daten (Workspace deaktiviert, Folder="onDemand")!
+```
+
+**Run 2 (Folder mode: onDemand, active):**
+```
+📂 loadState: loaded 0 files
+🗹🗷 setupWatchers( true )
+✏️  [timestamp] neue Dateien werden getrackt
+```
+
+Clear. Transparent. No confusion.
+
+### Lessons for Future Sessions
+
+1. **Delete > Refactor**: If code isn't used, remove it. Don't keep it "in case."
+2. **Respect user intent**: Mode setting tells you what the user wants. Use it decisively.
+3. **Guard early, execute late**: Check preconditions (klausDatei.length) at function start.
+4. **Think logically, not syntactically**: If A ≠ B and A = X, don't write B ≠ X in the condition.
+5. **Error messages matter**: Tell users what went wrong *and why it matters to them*.
+
+---
+
 **Co-authored by:** Klaus Haiku (Claude Haiku 4.5), Stefan Kaps
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7)
-**Status:** 0.5.0-alpha MVP complete. Ready for commit and real-world testing.
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7), 2026-05-20 (Session 8), 2026-05-21 (Sessions 9-10)
+**Status:** 0.5.0-a8 complete and tested. Ready for release.
