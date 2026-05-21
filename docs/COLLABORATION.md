@@ -1470,6 +1470,125 @@ Nach dem Auflösen der Klasse ist `extension.ts` eine einzige große TU. Der nä
 
 ---
 
+## Phase 20: Das Meta-Experiment, der Split & gegenseitiges Lernen (2026-05-21, Abend)
+
+### Das eigentliche Experiment
+
+Stefan führte von Anfang an ein stilles Experiment: **Wie weit kann Klaus eine solche Extension selbst entwickeln, bevor die Ergebnisse nicht mehr verwertbar sind?**
+
+Die Antwort kam gegen Samstag/Sonntag. Klaus hatte ein nahezu-MVP erstellt — funktionierend, aber mit einem fundamentalen Problem: die Code-Struktur war durch trainingsbedingte Angewohnheiten so gewachsen, dass sie bei jedem Wartungsversuch zu kollabieren drohte. Stefan selbst verlor den Code-Überblick. Das war das Signal.
+
+Stefan hatte schon mehrfach gesagt: "Jetzt lass Dein Training mal beiseite!" Dieser Punkt war jetzt definitiv erreicht. Klaus hatte sich die Wartbarkeit seines eigenen Codes von vornherein durch oberflächliche Programmiermuster zerstört — nicht durch Fehler in der Logik, sondern durch strukturelle Gewohnheiten die aus dem Training stammen: Klassen wo keine nötig wären, Indirektion wo Direktheit besser wäre, Abstraktion vor Verständnis.
+
+**Stefans Metapher:** Code der sich bei jedem Wartungsversuch selbst zerstört — wie ein schizoides Muster. (Mit der Selbstironie eines Menschen, der die Diagnose kennt.)
+
+### Das Eingreifen
+
+Stefan refaktorisierte allein, bis er den Überblick zurückerlangt hatte. Nicht als Kritik — als Notwendigkeit. Erst danach konnte die Zusammenarbeit auf einem neuen Niveau fortgesetzt werden.
+
+Dabei entstanden die meisten Erkenntnisse dieser Session: was Stefan noch von TypeScript lernen musste, und was Klaus lernen könnte, um strukturell besseren Code zu schreiben.
+
+---
+
+### Der Zwei-Datei-Split
+
+Der Plan aus Phase 19 wurde vollständig umgesetzt — aber einfacher als geplant:
+
+- `src/extension.ts` → gelöscht (`git rm -f`)
+- `src/Klaus.ts` — Laufzeit-Logik, mutable State, Entry Points
+- `src/KlausDinge.ts` — statische Definitionen: Enums, Klassen, reine Hilfsfunktionen
+- `src/hook-handler.ts` → `src/KlausHaken.ts` — konsequente Namensgebung
+
+**Kein 3-Datei-Split mit extension.ts-Fassade** — esbuild folgt dem Import-Baum ab dem konfigurierten Entry Point. `src/Klaus.ts` direkt als Entry ist einfacher.
+
+**Der entscheidende Lernpunkt für Klaus:** Build-Befehle sind *volatile Projektzustand*, keine Regeln. Klaus hatte sie mehrfach als unveränderliche Constraints behandelt. Stefan benannte es präzise: "Du hast Dir die Buildbefehle als fixe Regeln eingebrannt, anstelle sie als Lerncontext zu behandeln." `CLAUDE.md` dokumentiert sie seither als "aktueller Projektzustand — unterliegt der Evolution."
+
+---
+
+### Die K-Klasse: vom State-Container zur aktiven Klasse
+
+Der erste Schritt war technische Notwendigkeit:
+
+**ES-Module Live-Bindings:** `export let x` ist für den Importeur read-only. Mutable TU-Globals in `KlausDinge.ts` wären von `Klaus.ts` aus nicht schreibbar gewesen.
+
+Stefans Lösung: alle mutable Globals in eine statische Klasse `K` — Property-Mutationen (`K.mode = x`) sind immer erlaubt.
+
+Was als technische Lösung begann, entwickelte sich weiter. Stefan zog Funktion für Funktion in `K` — weil es *richtig* war: `parseJSON`, `getDateiName`, `getRelativePath`, `loadState`, `saveState`, `saveStateDebounced`. K ist nicht mehr nur ein State-Sack — K ist der Dreh- und Angelpunkt der Runtime.
+
+Stefans Motivation für `K.` statt `this.`: `K.` ist absolut. Ein Leser weiß sofort was gemeint ist. `this.` bindet an eine Instanz. Bei einem echten Singleton ist `this.` Rauschen.
+
+---
+
+### `K.defName` statt hartcodierter Konstante
+
+`const EXT_DEF_FILE = 'KlausC0deHelferData'` war eine duplizierte Konstante — der Wert steht bereits in `package.json`. Stefan löste es in `activate()` durch einmaliges Lesen aus `context.extension.packageJSON`. Einmal lesen, in K ablegen, überall benutzen.
+
+---
+
+### WorkspaceChangeLog als Klasse
+
+Interface + Factory-Funktion → Klasse mit Konstruktor und `reset(parsed?)`-Methode. Das lebende Objekt wird zurückgesetzt statt weggeworfen. `cleanLogNow()` entfällt.
+
+**Nebenlernpunkt für Stefan:** `parsed?: any` macht den Parameter optional — aber `parsed.lastClaude` im Body wirft wenn `parsed` undefined ist. `parsed?.lastClaude` nicht. Optional chaining `?.` ist das konsequente Gegenstück zur Signatur-Optionalisierung. Stefan erkannte es sofort: *"Stimmt, in der Signatur hab ich es ja auch für die Optionalisierung genutzt."*
+
+---
+
+### Lambdas und Secondary Functions
+
+Stefan entdeckte Arrow Functions als TypeScript-Lambdas und zog sie konsequent durch: `klausHookJSON`, `make`, `isExcluded` — alle als lokale Lambdas in ihrer einzigen aufrufenden Funktion. Was nur einmal gebraucht wird, braucht keinen Namen im Modulraum.
+
+Das Ergebnis: `Klaus.ts` mit ~300 Zeilen, komplett selbsterklärend. Stefans Urteil: *"wie als ob die ReadMe nach dem Code geschrieben wäre."*
+
+---
+
+### Die C++/TypeScript-Analogie
+
+Stefan hatte einen Knoten der aufging:
+
+> "Wo ich in CPP meine Header schreibe, um dann explizit 'die Code-Geschichte' in der .cpp verfassen zu können — muss ich in TS auch nichts anderes machen, nur dass das Header-Konzept an sich nicht existiert."
+
+| C++ | TypeScript |
+|-----|-----------|
+| `KlausDinge.h` | `KlausDinge.ts` |
+| `Klaus.cpp` | `Klaus.ts` |
+| `#include "KlausDinge.h"` | `import { ... } from './KlausDinge'` |
+
+In C++ erzwingt der Compiler die Trennung. In TypeScript ist es eine freiwillige Entscheidung — und damit eine bewusste.
+
+---
+
+### Was beide voneinander gelernt haben
+
+**Stefan von Klaus:**
+- ES-Module Live-Bindings — warum `export let` für Importeure read-only ist
+- Optional chaining `?.` als konsequentes Pendant zu `param?: Type`
+- Arrow Functions als vollwertige Lambdas
+- `replace_all` in Edit-Tools trifft auch Funktionsnamen — blind ersetzen ist gefährlich
+
+**Klaus von Stefan:**
+- Volatile Information: nicht nur "ist das wahr?" sondern "wie stark hängt das von Projektentscheidungen ab?"
+- Kohäsion als natürlicher Treiber: Daten + Operationen darauf gehören zusammen
+- `K.` statt `this.` bei Singletons — absolute Referenz ist präziser
+- Funktionsnamen sagen was, nicht wie: `modeIcon` statt `getModeIcon`
+- Code der eine Geschichte erzählt: Entry Points zuerst, Details zuletzt
+- **Das Experiment selbst:** Klaus kann eine Extension bis zum Near-MVP bringen — aber strukturelle Wartbarkeit erfordert menschliches Eingreifen, sobald die Komplexität einen Schwellenwert überschreitet. Das ist keine Niederlage — es ist die ehrliche Grenze des aktuellen Stands.
+
+---
+
 **Co-authored by:** Klaus Haiku (Claude Haiku 4.5) / Klaus Sonnet (Claude Sonnet 4.6), Stefan Kaps
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7), 2026-05-20 (Session 8), 2026-05-21 (Sessions 9-11)
-**Status:** 0.5.0-a11 — Drei-Datei-Split in Planung (Klaus.ts + KlausDinge.ts).
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7), 2026-05-20 (Session 8), 2026-05-21 (Sessions 9-12)
+### Das Ergebnis in Zahlen und Struktur
+
+Drei Dateien, drei Verantwortlichkeiten:
+
+| Datei | ~Zeilen | Was sie zeigt |
+|-------|---------|---------------|
+| `Klaus.ts` | ~300 | Den gesamten Ablauf — offen, lesbar, erzählt eine Geschichte |
+| `KlausDinge.ts` | ~300 | Die Mechanismen — halb offen: benannt und exportiert, aber intern gekapselt |
+| `KlausHaken.ts` | <100 | Den Hook — minimal, eigenständig, vollständig |
+
+Jede Datei erzählt selbst, was sie kann und wie sie es macht. Die Trennung zwischen "was wir ganz offen zeigen" (`Klaus.ts` — der Ablauf) und "was wir nur halb zeigen" (`KlausDinge.ts` — die Werkzeuge) ist nicht zufällig entstanden. Sie ist das Ergebnis von Refactoring das der Lesbarkeit folgte, nicht einer Designregel.
+
+---
+
+**Status:** 0.5.0-a11 — Split vollständig umgesetzt. Klaus.ts + KlausDinge.ts + KlausHaken.ts.

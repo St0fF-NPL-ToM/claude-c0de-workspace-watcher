@@ -112,6 +112,6 @@ The next commit will include the incremented version. This ensures committed ver
   - `--platform=node`: targets Node.js runtime (not browser)
 
 **Output artifacts** (aktueller Projektzustand — unterliegt der Evolution):
-- `dist/Klaus.js`: VSCode extension (bundled, minified, ~9.7KB)
+- `dist/Klaus.js`: VSCode extension (bundled, minified, ~10.5KB)
 - `dist/KlausHaken.js`: Claude Code hook (bundled, minified, ~1.5KB)
 
