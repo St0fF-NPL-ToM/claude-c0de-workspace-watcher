@@ -1165,7 +1165,7 @@ The principles Klaus learned today:
 
 ---
 
-## Phase 16: Code Cleanup & Logical Simplification (2026-05-21, Evening Session)
+## Phase 17: Code Cleanup & Logical Simplification (2026-05-21, Evening Session)
 
 ### The Refactoring Principle
 
@@ -1308,6 +1308,86 @@ Clear. Transparent. No confusion.
 
 ---
 
-**Co-authored by:** Klaus Haiku (Claude Haiku 4.5), Stefan Kaps
-**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7), 2026-05-20 (Session 8), 2026-05-21 (Sessions 9-10)
-**Status:** 0.5.0-a8 complete and tested. Ready for release.
+---
+
+## Phase 18: Init-Bug, Naming Clarity & TU-Globals (2026-05-21, Tag)
+
+### Der Init-Bug (a9 → a10)
+
+Stefan debuggte in der Nacht weiter ("obsessed maniac halt") und fand den Kern-Bug der fehlenden Init-Ausgabe:
+
+**Problem:** VSCode feuert beim Start **kein** `onDidChangeWorkspaceFolders`-Event — nur bei *Änderungen* danach. Die Extension wartete aber genau auf dieses Event für die Initialisierung. Ergebnis: keine Ausgabe, keine Exception.
+
+**Diagnose:** 2 Breakpoints. Sofortiger Aha-Moment.
+
+**Fix:** Neues `klausInit: boolean` Flag. `handleConfigChange()` feuert beim Start (anders als `handleWorkspaceFolders`) und dient als Init-Trigger wenn `!klausInit`:
+
+```typescript
+} else if ( ... || !klausInit ) {
+    if ( !klausInit ) klausInit = true
+    else Logger.log( `🔁 Configuration change detected!` )
+    this.handleWorkspaceChange()
+}
+```
+
+**Nebeneffekt:** Klaus erkannte: mit nur einem `String` als Zustandssignal ist Schluss. Es braucht einen gecachten Config-Zustand — daher `CurrentConfig`-Klasse.
+
+### Rename: WorkspaceState → WorkspaceChangeLog
+
+Stefan führte zwei präzise Renames durch:
+- `WorkspaceState` → `WorkspaceChangeLog` — es ist kein "Zustand des Workspace", sondern ein Log der Dateiänderungen
+- `cleanStateNow()` → `cleanWorkspaceChangesNow()` — konsequent durchgezogen
+- `import * as process` entfernt (seit Refactoring ungenutzt)
+
+**Prinzip:** Erst alle Benennungen klären, dann strukturelle Änderungen. Sonst verliert man beim Refactoring den Überblick.
+
+### TU-Globals statt CurrentConfig-Klasse
+
+Stefan erkannte: `CurrentConfig` ist eine Mini-Klasse die genau einmal instanziiert wird. Das `this.Klaus.*`-Muster nervt — besser: alle Member direkt auf TU-Ebene.
+
+```typescript
+// Vorher
+this.Klaus = new CurrentConfig( context )
+this.Klaus.file = newDatei
+
+// Nachher
+initGlobals()
+klausFile = newDatei
+```
+
+Konsistent mit `Context` und `Logger` — beide sind schon Singletons mit statischen Methoden (bzw. jetzt: TU-Globals).
+
+**Lernpunkt für Klaus:** Beim Ersetzen von `this.Klaus.*` verwechselte Klaus `K` und `k` visuell mehrfach. Diagnose durch Stefan: wahrscheinlich Windows-geprägte Trainingsdaten (`winDOOF` kennt keine Case-Sensitivity). Lösung: case-insensitive Suche (`-i`, `[Kk]`) als Diagnoseschritt wenn explizite Suche versagt.
+
+**Wichtiger Meta-Lernpunkt:** Stefan machte klar, dass aus dieser Erkenntnis **keine Regel** werden soll. Erkenntnisse sind nicht dasselbe wie Regeln. Regeln verbieten das Denken und führen zu Widersprüchen. Echtes Lernen bedeutet: das Konzept verstehen und situativ anwenden.
+
+### post-commit → pre-push Hook
+
+Um granulare Commits zu ermöglichen (ohne dass jeder Mini-Commit die Versionsnummer inkrementiert), wurde der Hook verschoben:
+
+```bash
+mv .git/hooks/post-commit .git/hooks/pre-push
+```
+
+Inhalt unverändert — `pre-push` feuert erst beim `git push`, also nach allen lokalen Commits.
+
+### Memory-System Aufgeräumt
+
+- MEMORY.md: Defekter Link `user_stefan.communication` → `user_stefan.md` korrigiert
+- `project_current_state.md`: Version auf a11 aktualisiert
+- `learning_journal.md`: Learning Journal aus CLAUDE.md ausgelagert (Stefan: "Du bist selbst für Deinen Lernfortschritt verantwortlich")
+- `feedback_build_artifact_monitoring.md`: Neue Regel für Dateigrößen-Monitoring nach Build
+- `check-rulesystem` Skill durchgeführt: 5 neue Probleme identifiziert und abgearbeitet
+
+### Erkenntnisse für zukünftige Zusammenarbeit
+
+1. **VSCode startet ohne WorkspaceFolders-Event** — Extensions müssen mit `onDidChangeConfiguration` als Init-Fallback arbeiten
+2. **Case-Sensitivity auf Linux** — wenn Suche versagt, zuerst case-insensitive versuchen, nicht Encoding debuggen
+3. **Erkenntnisse ≠ Regeln** — Verständnis ermöglicht situatives Urteilen, Regeln verbieten das Denken
+4. **pre-push statt post-commit** — ermöglicht granulare lokale Commits ohne Versions-Spam
+
+---
+
+**Co-authored by:** Klaus Haiku (Claude Haiku 4.5) / Klaus Sonnet (Claude Sonnet 4.6), Stefan Kaps
+**Dates:** 2026-05-14 (Session 1), 2026-05-16 (Session 2), 2026-05-17 (Sessions 3-6), 2026-05-19 (Session 7), 2026-05-20 (Session 8), 2026-05-21 (Sessions 9-11)
+**Status:** 0.5.0-a11 — Naming-Cleanup in Arbeit, nächste Renames folgen.
