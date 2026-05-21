@@ -1450,6 +1450,14 @@ Klaus behandelte Build-Kommandos (`bundle:ext`, `dist/extension.js`) als unverä
 
 **Die richtige Frage beim Einprägen:** Nicht nur "Ist das wahr?" — sondern auch "Wie stark hängt das von Projektentscheidungen ab und wie schnell kann es sich ändern?"
 
+### Volatile vs. Ephemeral — eine Vokabel klärt ein Konzept
+
+Am Rande der Session fragte Stefan nach dem Wort "ephemeral" — ihm war es fremd, er kannte nur die chemische Variante: "volatil" (wie CH4, flüchtig unter Normalbedingungen). Klaus erklärte den Unterschied: "ephemeral" = kurzlebig, "volatile" = veränderlich — kann sich ändern, muss es aber nicht.
+
+Dabei stellte sich heraus: **"volatile" ist die präzisere Beschreibung für Build-Dateinamen und Projektkonfiguration** als "ephemeral". Nicht kurzlebig — sondern stabil bis zu einer bewussten Entscheidung. Genau wie `volatile` in C/C++: "Mach keine Annahmen darüber, was hier steht — es könnte sich von außen geändert haben."
+
+Das schärfte das Konzept der Evolutionsabhängigkeit: nicht alle projektspezifischen Informationen sind *flüchtig*, aber sie sind *volatile* — veränderlich durch Projektentscheidungen, nicht durch Zeitablauf.
+
 ### Drei-Datei-Split geplant
 
 Nach dem Auflösen der Klasse ist `extension.ts` eine einzige große TU. Der nächste Schritt:
