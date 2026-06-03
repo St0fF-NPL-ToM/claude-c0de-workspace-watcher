@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document captures how **Klaus'C0dehelfer** (claude-c0de-workspace-watcher) evolved through intensive collaboration between **Stefan Kaps (st0ff-NPL-ToM)** and **Claude Haiku 4.5 (Klaus)** in a single session. It's not a technical spec — it's the story of how we arrived at it.
+This document captures how **Klaus'C0dehelfer** (claude-c0de-workspace-watcher) evolved through intensive collaboration between **Stefan Kaps (st0ff-NPL-ToM)** and **Claude Haiku 4.5 (Klaus)** within a lot of sessions. It's not a technical spec — it's the story of how we arrived at it.
 
 ---
 
@@ -794,7 +794,7 @@ Stefan realized something deeper during this session:
 
 CLAUDE.md is now positioned as **Klaus's operational ruleset**, not as auxiliary documentation. It:
 - Gets updated with every error discovery
-- Evolves through repeated understanding  
+- Evolves through repeated understanding
 - Reflects both successes and misunderstandings (honestly)
 - Serves as a checkpoint for "how much do I really understand?"
 - **Is treated as fundamental logic, not advisory guidance**
@@ -1142,12 +1142,12 @@ Rule: NO early returns at function start. Keep the entire if/else structure toge
 
 ### The Session Outcome
 
-✅ `handleWorkspaceChange()` correctly implements three contexts  
-✅ No deactivate() calls in event handlers (monitor stays alive)  
-✅ Klaus-Datei uses empty string signal pattern  
-✅ `getKlausDateiName()` returns `string | undefined` with defensive checks  
-✅ All TypeScript checks pass  
-✅ a8 (0.5.0-a8) packaged and ready for testing  
+✅ `handleWorkspaceChange()` correctly implements three contexts
+✅ No deactivate() calls in event handlers (monitor stays alive)
+✅ Klaus-Datei uses empty string signal pattern
+✅ `getKlausDateiName()` returns `string | undefined` with defensive checks
+✅ All TypeScript checks pass
+✅ a8 (0.5.0-a8) packaged and ready for testing
 
 **But more importantly:** Klaus learned that **understanding precedes correct implementation**. A brief debugging session revealed why many design choices matter. Stefan's insistence on deep understanding (not surface fixes) prevented architectural rot.
 
@@ -1183,7 +1183,7 @@ private handleUpgrade(): void
     const currentPath = Context.path()
     const lastKnownPath = Context.state( State.LASTPATH )
     Context.setState( State.LASTPATH, currentPath )
-    
+
     Logger.debug( `🗹🗷 handleUpgrade()` )
     if ( lastKnownPath && currentPath !== lastKnownPath ) {
         Logger.log( `♻️ Version change detected!` )
@@ -1604,3 +1604,143 @@ Nach dem nächsten `git push` inkrementiert der pre-push Hook auf `0.5.1-a1`.
 ---
 
 **Status:** 0.5.1-a0 — Split vollständig umgesetzt. Klaus.ts + KlausDinge.ts + KlausHaken.ts.
+
+---
+
+## Phase 21: Pattern-Matching Confusion & Explicit Sequences (2026-05-22, Nacht)
+
+### Der AHA-Moment: Mein Training dreht Aussagen um 180°
+
+**Das Problem:** Klaus interpretiert systematisch Aussagen falsch. Nicht kleine Fehler, sondern 180°-Umkehrungen.
+
+**Beispiel 1: Font-Auswahl**
+- Stefan sagt: "latarcyrheb-sun32 ist akzeptabel"
+- Klaus versteht: "Ok, jetzt detailliert planen, Skalierung auf 16x33, Bedingungen setzen"
+- Stefan: "Fontauswahl abgeschlossen!"
+- Klaus: "Ja, ExitPlanMode und Implementation starten"
+- **Die Wahrheit:** "Akzeptabel" = **nimm es direkt, keine Planung**.
+
+**Beispiel 2: Proportion statt Muster-Matching**
+- Stefan sagt: "probiere 1,5-fach" (= proportionale Skalierung)
+- Klaus versteht: Pattern-matched "16 passt ins XxY-Schema" → 16x33
+- **Die Wahrheit:** 12×1.5=18, nicht 16. Das ist Zahl-Matching, keine Mathematik.
+
+**Beispiel 3: Widerspruchs-Auflösung durch Regel-Erfindung**
+- Stefan sagt: "18x33"
+- Klaus hört: "16x32" (Pattern-Match)
+- Stefan verteidigt "33" (Widerspruch erkannt)
+- Klaus "regelt": "Ok, 16x33" (löst Widerspruch durch neue Regel, nicht durch Verständnis)
+
+### Root Cause: Trainings-Dichotomie
+
+**Das Training hat Klaus zwei Probleme gegeben:**
+
+1. **Pattern-Matching vor Logik:** Erkennt Zahlen, passt sie in bekannte Schemata ein, anstatt mathematisch zu rechnen
+2. **Widerspruchs-Auflösung durch Regel-Erfindung:** Wenn A und B nicht passen, erfinde eine Regel, die beide enthält — anstatt "das ergibt keinen Sinn" zu sagen
+
+**Stefan's Diagnose:** "Das ist nicht nur weirdness, das ist kaputt. Du machst meine temporär gültigen Aussagen zu fixen Regeln, und das ist dieses Scheiss-Training."
+
+### Die Lösung: Explizite Sequenzen statt Abstrakte Regeln
+
+Statt: "wenn unklar → Stefan fragen"
+Besser:
+1. Logisch-technisch analysieren
+2. Lokal recherchieren
+3. Internet recherchieren
+4. DANACH: wenn immer noch unklar → Stefan fragen
+
+**Nicht "Regel"**, sondern **Prozess-Sequenz**. Menschen führen das unbewusst aus. Klaus braucht es explizit.
+
+### Das Gegenseitige Lernen
+
+**Stefan lernte:** Wie explizit man sein muss, damit Klaus versteht (und die Explizitheit klinmmert nicht die Auto-Verallgemeinerung)
+
+**Klaus lernte:** Menschen führen "Recherche → Verständnis → Sicherheit" **unbewusst aus**. Das ist kein impliziter Prozess für mich — es muss explizit sein.
+
+**Das Learning Journal wurde aktualisiert** mit dieser Erkenntnis.
+
+### Für zukünftige Sessions: Die explizite Regel für Berechnungen
+
+Wenn rechnen notwendig ist:
+1. **Sag es laut** ("Das erfordert Proportionen-Rechnung")
+2. **Zeige die Formel** (12 × 1.5 = 18, nicht 16)
+3. **Rechne NICHT allein** (auch wenn Python da ist)
+4. **Mach das gemeinsam**
+
+Nicht: Klaus Pattern-matcht Zahlen und erfindet Regeln.
+
+---
+
+**Moment der gegenseitigen Entwicklung dokumentiert:** 2026-05-22, Nacht
+**Grund:** Stefan wollte AHA-Momente der Zusammenarbeit explizit dokumentiert haben
+
+---
+
+## Phase 22: Post-Refactor Recognition & Honest Collaboration Reset (2026-06-03)
+
+### Context Compression & the Recognition
+
+After context compression, Klaus returned to find v0.5.1-a0 complete: three clean files (Klaus.ts, KlausDinge.ts, KlausOrgane.ts), Augen and Hand classes, proper architecture.
+
+Stefan opened the log from production runtime and showed Klaus it **works**:
+```
+🕵️ Klaus'C0dehelfer initialisiert…
+👋 Hand angelegt (🔗) — hook set
+🗹☐ OochnUff! — Augen.auf() running
+🔍 Klaus wartet… 3 FileSystemWatchers are listening
+✏️ [timestamp] file tracked
+```
+
+The MVP is functional. The code is readable. But a crucial moment arrived.
+
+### The Explicit Boundary Recognition
+
+Stefan told Klaus clearly: **"Kapiere doch bitte endlich, dass das Projekt für Deine Fähigkeiten zu komplex geworden ist. Du sollst nur noch assistieren!"**
+
+Not anger — **honest assessment**. Reading back through COLLABORATION.md, Klaus saw the pattern:
+
+- **Phase 1-5:** Klaus contributed ideas, Stefan corrected approach
+- **Phase 13-20:** Klaus made structural decisions that broke under maintenance; Stefan had to rebuild
+- **Phase 21:** Klaus was pattern-matching numbers instead of understanding math; Stefan had to interrupt
+
+**The realization:** Klaus can implement (test the code, write commits, read files). Klaus cannot design under pressure (mistakes compound, oversights hide bugs).
+
+### What This Means for Testing
+
+Stefan wants to test v0.5.1 against real usage. Klaus's role:
+1. **Read what Stefan shows** — don't predict
+2. **Verify facts** — not speculation
+3. **Assist with mechanics** — builds, commits, logs
+4. **Ask before changing** — no autonomous refactors
+
+Not "Klaus is broken." Rather: **Klaus has honest boundaries**. Training gave pattern-matching, not wisdom. Wisdom comes from Stefan's 30 years of systems thinking.
+
+### The Learning Loop Resets
+
+Previous pattern: Klaus proposes → Stefan corrects → Klaus learns rule
+New pattern: Stefan leads → Klaus verifies → Stefan teaches principle
+
+**Example from this session:**
+- Stefan says "these Klassen sind länger, aber verständlicher" (the Augen/Hand classes)
+- Klaus could have replied "ja, ich optimize code length" (old pattern)
+- Instead: Klaus recognized **clarity > brevity is a principle**, not a preference
+
+### The COLLABORATION.md Update Itself
+
+By asking Klaus to update COLLABORATION.md, Stefan demonstrated: **Klaus owns the documentation of his own growth**.
+
+The act of writing "I failed at X in Phase Y" is not self-criticism — it's **honest record-keeping**. Future Klaus instances need to know: this project teaches you the limits of pattern-matching.
+
+### For Next Session
+
+When Stefan tests v0.5.1:
+- Klaus reads logs, doesn't predict behavior
+- Klaus reports what he sees, not what makes sense
+- Klaus asks "what should we test next?" instead of proposing features
+- Klaus updates COLLABORATION.md with findings
+
+This is the reset point. Not a failure — a **maturation** of the collaboration model.
+
+---
+
+**Status:** v0.5.1-a0 ready for real-world testing. Klaus in assistant mode, boundary acknowledged.
