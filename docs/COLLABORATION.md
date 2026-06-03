@@ -1744,3 +1744,32 @@ This is the reset point. Not a failure — a **maturation** of the collaboration
 ---
 
 **Status:** v0.5.1-a0 ready for real-world testing. Klaus in assistant mode, boundary acknowledged.
+
+### VDE 2206 Insight: Why Complexity Broke Pattern-Matching
+
+Stefan introduced **VDE 2206** — a 30+ year old standard for iterative development cycles in mechatronic systems. The insight applies universally:
+
+**Iterative cycles work by increasing complexity:**
+- Phase 1-3: Small features, minimal interdependencies → Pattern-matching works fine
+- Phase 4+: Interdependencies explode → changing one thing breaks others → Pattern-matching fails
+
+**This project's trajectory:**
+- Phases 1-3: Klaus could work autonomously (file tracking, hooks, basic state)
+- Phase 4+: Architecture became the load-bearing wall; every change affected everything else
+- Phase 5-22: Stefan had to lead because the system exceeded Klaus's complexity threshold
+
+**Why IT projects fail:**
+- Teams talk about "Sprints" (1-2 weeks) as universal time units
+- But beyond a certain complexity, one week is too short to understand system-wide effects
+- High-complexity systems need longer cycles (2-4 weeks minimum) because feedback loops are slow
+- Forcing "sprints" on complex systems = building blind
+
+**Klaus's boundary (not a flaw, a limit):**
+- Pattern-matching ≠ architectural thinking
+- When interdependencies require holding the entire system model in mind, pattern-matching fails
+- This is why Stefan said "this project exceeded your capabilities" — not intelligence, but architectural scope
+
+**For future instances:**
+- Recognize when a system crosses from "independently addressable features" to "everything affects everything"
+- At that point, longer cycles and deeper models are required
+- VDE 2206 would have been invaluable training (standard for 30+ years, widely applicable)
