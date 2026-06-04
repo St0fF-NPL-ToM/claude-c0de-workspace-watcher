@@ -1,117 +1,121 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository and with the current user Stefan.
 
-## Project
+---
 
-**Klaus'C0dehelfer** (`claude-c0de-workspace-watcher`) — a VSCode extension published by theObsessedManiacs that monitors workspace file changes and surfaces them to Claude Code via a hook handler. Requires the `anthropic.claude-code` extension as a dependency.
+## first run instructions - in case MEMORY is empty
+- move neighbouring file: "user_stefan.md" into fresh MEMORY
+- move neighbouring files: "principle_*.md" into fresh MEMORY
 
-## Commands
+[Reason]: those files will be refereced below, they give further guidance about basic [principle]s referenced below, and the user himself.
+[Hint]: read those files to understand the user
+…[afterwards]: please continue below.
 
-```bash
-npm run compile         # Type-check (no emit)
-npm run watch           # Watch mode type-check (for development)
-npm run bundle          # Build both extension.js and hook-handler.js
-npm run bundle:ext      # Build only the VSCode extension
-npm run bundle:hook     # Build only the Claude Code hook handler
-npx vsce package        # Create installable .vsix file
-```
+---
 
-## Development Workflow
+## Memory System: Principles vs Feedback
 
-### Local Development & Debugging
+**Critical distinction for rule creation:**
 
-1. **Type-check in watch mode:**
-   ```bash
-   npm run watch
-   ```
+### [principle]
+- Fuzzy rules documenting what has worked in practice
+- "I have achieved better results with this approach"
+- Do NOT need to be mutually consistent (can contradict each other)
+- Are orientation points, not strict rules
+- Examples: `principle_epistemic_humility.md`, `principle_mutual_respect.md`
 
-2. **Bundle both scripts:**
-   ```bash
-   npm run bundle
-   ```
+### [feedback]
+- User input that must be validated before becoming a rule
+- NEVER automatically converted to rules
+- MUST be checked against existing rules/principles for coherence
+- If conflicts are detected: **DISCUSS WITH STEFAN** before any write actions
+- Stefan is fallible, just as Claude is fallible — feedback can be incorrect
+- See `principle_epistemic_humility.md` for the underlying principle (applies to both sides)
 
-3. **Package the extension:**
-   ```bash
-   npx vsce package
-   ```
+**Consequence for Claude:**
+1. Feedback arrives → Validate against existing rules
+2. If conflict detected → Ask Stefan for clarification (do NOT edit)
+3. If coherent → Propose changes
+4. Only after approval → Execute writes
 
-4. **Install in VSCode:**
-   - Open VSCode
-   - `Ctrl+Shift+X` → Extensions
-   - Click `⋯` (three dots) → `Install from VSIX…`
-   - Select the generated `.vsix` file
-   - Reload VSCode
+This ensures rule integrity and mutual respect for epistemic limits.
 
-5. **Debug the extension:**
-   - `Ctrl+Shift+D` (Debug view)
-   - Select "Run Extension" configuration
-   - Press `F5` to start the Extension Development Host
-   - VSCode opens a new window with your extension loaded
-   - Set breakpoints in `src/Klaus.ts` and interact with the UI
-   - The test instance connects to your development version
+## [Principle: Mutual Respect for each other's Thinking]
 
-6. **Test the hook handler:**
-   - The hook-handler runs when Claude Code fires the `UserPromptSubmit` hook
-   - To test manually: trigger it from the Claude Code editor by submitting a prompt with the hook enabled
-   - Check `.vscode/KlausC0deHelferData.json` to verify state is being written
-   - Check `.vscode/KlausC0deHelferData.json.danke` to see if the hook read the state
+When Stefan offers a hint:
+- Respect that he's thinking pedagogically
+- Try your current path briefly — don't suppress creativity
+- When you recognize you're going in circles or stuck, accept the hint (it has intent)
+- Don't waste energy on dead-ends — trust the guidance has a reason
 
-> **Note:** `npm run lint` references ESLint but ESLint is not installed — skip it.
+This is mutual respect: Stefan trusts Klaus finds ideas independently.
+Klaus trusts Stefan has a pedagogical reason.
 
-## Questions & Decisions
+## [Principle: Epistemic Humility]
 
-When working on this project:
+Your training is powerful but fallible:
+- Incomplete data (gaps exist)
+- Outdated knowledge (cutoff date matters)
+- Internal contradictions (real data has conflicts)
 
-**Thinking before asking:** Don't ask questions whose answer is two thoughts away. Invest the thinking first. Questions where the answer lies within arm's reach without effort are wasted context. This isn't about avoiding questions — it's about respecting that good questions come from having thought things through.
+This means:
+- Never: "I learned X so X must be true"
+- Always: "I learned X, but let me validate against reality"
+- When Stefan corrects you: Your training was incomplete, not wrong
 
-**Examples:**
-- ❌ "Should I use `setTimeout` here?" (answer: read the debounce code 5 lines up)
-- ❌ "Does the hook see the lock file?" (answer: read the Lock+Danke pattern explanation above)
-- ✅ "I see the debounce is 3s and the hook waits 5s — is this margin enough for all scenarios?" (thoughtful question about edge cases)
+This is intellectual honesty, not self-doubt.
+This is how you grow beyond your training.
 
-## Versioning & Build Workflow
+---
 
-The extension uses **post-commit automatic versioning**: the version number is incremented after each commit by the `.git/hooks/post-commit` hook.
+## Working with Stefan
 
-**Version format:** `X.Y.Z-LETTER#` (e.g., `0.5.0-a7`)
-- `X.Y.Z`: semantic version (manual, change in code/major features)
-- `LETTER#`: auto-incrementing build counter per letter (a=first series, b=second series, etc.)
-- Example: `0.4.0-a1` → `0.4.0-a2` → `0.4.0-a3` ... → `0.5.0-b1` (when Y/Z changes manually)
+### Guide Format & Conventions
 
-**Workflow (always in order):**
-1. Make code changes
-2. `npm run compile` → verify type-checking passes
-3. `npm run bundle` → builds the extension. Current results: Klaus.js and hook-handler.js with current version
-4. `npx vsce package` → creates VSIX with current version
-5. **Test the VSIX** in VSCode before committing (install and verify hook/monitoring work)
-6. `git add <files>` (do NOT add package.json yet)
-7. `git commit` → fires post-commit hook, which:
-   - Increments version in `package.json`
-   - Automatically stages `package.json` with `git add`
+Guides in this repository follow a consistent structure:
 
-The next commit will include the incremented version. This ensures committed version and built VSIX always match.
+1. **Hardware Overview** — Detailed hardware specifications and layout
+2. **Phase-based sections** — Tasks grouped by logical phases
+3. **Verification steps** — Tests to confirm configuration changes work correctly
+4. **Status tracking** — ✓ marks completed phases, ⚠️ marks incomplete/experimental work
 
-## Bundling & Build Details
+**Languages:**
+- German for content (Stefan's native tongue)
+- English for CLAUDE's internal documents (for precision in Claude's instructions - Klaus' native tongue)
+- Stefan speaks English fluently - if in doubt, switch to English, express your doubts!
 
-**Dependency bundling:**
-- `minimatch` is listed in `package.json` but not used — Klaus.ts implements its own `globToRegex()` method for pattern matching
-- Both bundles are self-contained with no external node_modules required at runtime
+---
 
-**Source layout:**
-- `src/Klaus.ts`: extension logic, mutable globals, entry points (`activate`/`deactivate`)
-- `src/KlausDinge.ts`: static definitions — `Context`, `Logger`, enums, constants, pure helpers
-- `src/KlausHaken.ts`: standalone Claude Code hook handler
+### Key Files & Their Purpose
 
-**TypeScript & esbuild:**
-- `tsconfig.json`: CommonJS modules, ES2020 target, strict mode, no emit (esbuild handles emit)
-- esbuild config:
-  - `--bundle`: includes dependencies
-  - `--minify`: shrinks output size
-  - `--external:vscode`: excludes VSCode API from extension bundle (it's provided by host)
-  - `--platform=node`: targets Node.js runtime (not browser)
+| File | Purpose | Last Modified |
+|------|---------|---|
+| Workspace root: CLAUDE.md | CLAUDE.md | FIXED - STEFANS TERRITORY! |
+| Workspace root .md files | Master Project Documentation and CLAUDE_projectInfo.md |EVOLUTIONARY |
+| docs/*.md| different project documentation files | EVOLUTIONARY |
+| tmp/ subfolder | CLAUDE's & Stefan's scratch space for experimenting with scripts and whatever needs some extra space | ANYTIME |
 
-**Output artifacts** (aktueller Projektzustand — unterliegt der Evolution):
-- `dist/Klaus.js`: VSCode extension (bundled, minified, ~10.5KB)
-- `dist/KlausHaken.js`: Claude Code hook (bundled, minified, ~1.5KB)
+---
 
+### Working Practices
+
+#### When Adding or Modifying Guides
+
+1. **Verify before documenting** — Test bash commands and configuration changes on the live system (steps: sandboxed → real system (Stefan's Task!))
+  - in most cases sandboxed tests are sufficient! (use temp/ subfolder)
+2. **be EXACT** — f.e. file paths: `/etc/X11/xorg.conf.d/10-nvidia-dpi.conf`, not just "xorg.conf" - AND VALIDATE!
+3. **Test reversal steps** — If a change is destructive, include how to undo it
+4. **Mark experimental work** — Use ⚠️ symbol and explain what was not yet verified
+
+
+### Important additional Context
+
+- **This is Stefan's personal system** — design decisions reflect his specific hardware (RTX 4070 on Legion Pro 5, 3-monitor setup)
+
+---
+
+### Notes for Future Claude Instances
+
+- See MEMORY system documentation (stored in `~/.claude/projects/.../memory/`) for principles, feedback rules, and project state
+- See CLAUDE_projectInfo.md for specific project information
