@@ -51,63 +51,49 @@
 - [x] Honest documentation: Zero Configuration → coming maybe for 0.6.0
 - [x] Credits: Klaus Haiku as Author, Stefan Kaps as Co-Author
 
-### Performance & UX (Done)
-- [x] Deactivate FileSystemWatchers when `awarenessMode=none` ✓ Done in Phase 5
-- [x] Debounce on state save ✓ 3-second debounce (Phase 11, with immediate Lock signal)
-- [x] Race-condition-free Lock+Danke IPC ✓ Lock set on debounce start, not in saveState()
+### Phase 7: Performance & UX (Session 2026-05-16+)
+- [x] Deactivate FileSystemWatchers when `awarenessMode=none`
+- [x] Debounce on state save (3-second debounce with immediate Lock signal)
+- [x] Race-condition-free Lock+Danke IPC
 
-### Documentation (Done)
-- [x] Update README.md with installation instructions ✓ Three setup methods documented
-- [x] Document hook protocol ✓ Lock+Danke IPC pattern, hook output schema in README + CLAUDE.md
-- [x] Document stateFileName config ✓ Configuration section with examples in README
+### Phase 8: Documentation (Session 2026-05-17+)
+- [x] Update README.md with installation instructions (three setup methods)
+- [x] Document hook protocol (Lock+Danke IPC pattern, hook output schema)
+- [x] Document stateFileName config (configuration section with examples)
 
-### Testing & verification sessions
-#### Session 2026-05-16
-- [x] Test with awarenessMode=none → no tracking
-- [x] Test with awarenessMode=onDemand → tracking active
+### Phase 9: Testing & Verification (Session 2026-05-16 to 2026-05-17)
+- [x] Test awarenessMode=none → no tracking
+- [x] Test awarenessMode=onDemand → tracking active
 - [x] Verify onDidChangeWorkspaceFolders triggers correctly
 - [x] Verify awarenessMode + stateFileName config changes work together
 - [x] Verify dot-file exclusion works (no .claude/*, .vscode/* tracked)
 
----
+### Phase 10: Architecture Maturation & Ephemeral Diffs Implementation (2026-05-21 to 2026-06-03)
+- [x] **Separation of Concerns:** Augen (file watching), Hand (hook management), K (state machine) — dedicated, testable classes
+- [x] **Single Source of Truth:** `package.json` config → pre-build generator → `KlausKonstanten.generated.ts` (no duplication)
+- [x] **Ephemeral Diffs (v0.6.0):** WorkspaceChangeLog.push() generates unified diffs via jsdiff.createTwoFilesPatch()
+- [x] **Snapshot-based Diffs:** Files tracked → snapshots saved on `danke()` → diffs generated on next change
+- [x] **Code Quality:** Refactored for readability (Singletons, proper separation, semantic function ordering)
+- [ ] **End-to-end Testing:** Code complete and functional — awaiting real-world workspace testing
 
-## ⚠️ Known Limitations
-
-### Limitation 1: Hook-Handler Hardcoded State Filename
-**Issue:** The hook-handler reads `.vscode/KlausC0deHelferData.json` **hardcoded**. The extension's `stateFileName` config is ignored by the hook.
-
-**Current:** Extension can use `stateFileName: "CustomName"`, but hook always reads `KlausC0deHelferData.json`
-
-**Impact:** Custom state filenames don't work end-to-end. Hook and extension become out-of-sync if user changes `stateFileName`.
-
-**Solution (0.6.1+):** Hook-handler must read `stateFileName` from extension's config or accept it as parameter via hook stdin metadata.
-
-**Workaround:** Don't change `stateFileName` from default. It's currently not fully configurable.
-
-### Limitation 2: minimatch Unused Dependency
-**Issue:** `minimatch` is in `package.json` but never imported or used. Extension implements its own `globToRegex()`.
-
-**Current:** Dead dependency, but adds to bundle (though unused).
-
-**Impact:** Potential confusion for future maintainers about whether patterns use minimatch semantics.
-
-**Solution (0.6.1+):** Remove `minimatch` from `package.json` after confirming no hidden usages.
+**Version:** v0.5.1-a0 → v0.6.0 (feature-complete, testing-pending)
 
 ---
 
 ## ⏳ Pending / Future
 
-### Hook Handler (Medium Priority) Features (SPEC.md Implementation)
-- [ ] Fix hardcoded stateFileName in hook-handler (Limitation 1)
-- [ ] Implement MultiDiff architecture:
-  - [ ] `diffToKlaus(filename, timestamp)` — query VSCode Timeline, generate unified diffs
-  - [ ] `diffChangesToKlaus()` — Mode P (On-Demand): loop through changed files, pipe diffs
-  - [ ] `diffFileToKlaus(filename)` — Mode C (Real-Time): single file notification on save
-- [ ] Replace simple file list with actual diffs in hook output
-- [ ] Use correct API to access function of Plugin from Hook-Call executed by claude_code
+### v0.6.0: Ephemeral Diffs (Elegant Approach)
 
-### Dependencies (Low Priority)
-- [ ] Remove unused `minimatch` from package.json (Limitation 2)
+**Status:** ✅ Implementation complete. Awaiting real-world workspace testing.
+
+See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details.
+
+**What's Implemented:**
+- ✅ WorkspaceChangeLog.push() generates unified diffs via jsdiff
+- ✅ Snapshot-based system: files tracked → snapshots saved → diffs on next change
+- ✅ Lock+Danke IPC: atomic state transitions, safe diff coordination
+- ✅ HookData format: diffs[], files[], lastClaude timestamp
+- ⏳ End-to-end testing: code complete, needs real workspace validation
 
 ### Publishing
 - [ ] **Blocked**: theObsessedManiacs group approval before republishing to Open VSX
@@ -126,45 +112,16 @@
 
 ---
 
-## ⏳ Next Phase: UX Polish & SPEC.md (0.6.0)
+---
 
-### UX Enhancement: PostInstall Auto-Configuration
-- [ ] Implement `onExtensionInstalled` hook or welcome screen
-- [ ] Auto-set sensible defaults: `awarenessMode = onDemand`, hook auto-register
-- [ ] Show warning if hook registration fails (e.g., no Claude Code extension)
-- [ ] Link to `Klaus'C0dehelfer: Edit Settings` command for manual override
+### Future: v0.7.0 & Beyond
 
-**Why:** "Zero Configuration" is a promise, not yet implemented. Users shouldn't have to manually hunt down settings after install.
-
-### SPEC.md Implementation: Unified Diffs
-
-The [SPEC.md](SPEC.md) roadmap describes the architecture for **unified diffs**:
-
-Instead of:
-```
-Following workspace-files have changed:
-  • src/main.ts
-```
-
-We'll send:
-```
-diff --git a/src/main.ts b/src/main.ts
-index abc1234..def5678 100644
---- a/src/main.ts
-+++ b/src/main.ts
-@@ -42,3 +45,5 @@
- const oldCode = 1;
--const removed = 2;
-+const added = 3;
-```
-
-**Required:**
-- Query VSCode Timeline API for change history
-- Generate unified diffs per file
-- Transport diffs via hook output
-- Test with realTime mode
+**v0.7.0 roadmap (post-v0.6.0):**
+- UX Enhancement: PostInstall Auto-Configuration
+- SPEC.md Implementation: Unified Diffs (if needed after real-world testing)
+- Optimizations based on v0.6.0 testing results
 
 ---
 
 ## Last Updated
-2026-05-17 Evening (Session 6 completion: CLAUDE.md deep dive, 14 documentation errors fixed, known limitations documented, phase 13 learning added to COLLABORATION.md)
+2026-06-03 Evening (Session: KlausHaken.ts refactoring, ephemeral diffs architecture designed, stateFileName config fixed)
