@@ -21,3 +21,4 @@ dist/
 
 # VSIX distribution files (rebuild locally, don't commit)
 *.vsix
+*.generated.*

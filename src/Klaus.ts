@@ -1,279 +1,239 @@
 import * as vscode from 'vscode'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { K, Context, Logger, StateKey, ConfigKey, modeIcon, scopeIcon, WorkspaceChangeLog } from './KlausDinge'
+import * as diff from 'diff'
+import { CKey, ConfigKey, Default, ExtName } from "./KlausKonstanten.generated"
+import { Augen, Hand } from './KlausOrgane'
+import { Context, HookData, Logger, modeIcon, parseJSON, scopeIcon, StateKey, WorkspaceChangeLog } from "./KlausDinge"
 
-// → VSCode Extension integration
-export function activate( context: vscode.ExtensionContext )
+// → das ist Klaus!
+export class K
 {
-    Logger.init( context )
-    Context.init( context )
-    handleLegacyBugs()
-    handleUpgrade()
-    // das Folgende dürfen wir 1x anstelle "const EXT_DEF_FILE = 'KlausC0deHelferData'" machen.
-    K.defName = context.extension.packageJSON.contributes.configuration.properties[ 'claude-c0de-workspace-watcher.stateFileName' ].default
-    const cfg = vscode.workspace.getConfiguration( Context.extName() )
-    if ( cfg ) {
-        K.mode = cfg.get( ConfigKey.MODE, 'none' )
-        K.file = cfg.get( ConfigKey.FILE, '' )
-        K.incl = cfg.get( ConfigKey.INCL, [] )
-    }
-    vscode.workspace.onDidChangeWorkspaceFolders( () => { handleWorkspaceChange() } )
-    vscode.workspace.onDidChangeConfiguration( ( event ) => { handleConfigChange( event ) } )
-    context.subscriptions.push(
-        vscode.commands.registerCommand( Context.extName() + '.openSettings',
-            () => { vscode.commands.executeCommand( 'workbench.action.openSettings', Context.extName() ) } )
-    )
-}
+    public static mode: string = Default.MODE
+    public static file: string | undefined = undefined
+    public static incl: string[] = Default.INCL
+    public static excl: RegExp[] = []
+    public static log: WorkspaceChangeLog = new WorkspaceChangeLog()
+    public static wartet: NodeJS.Timeout | null = null
+    public static defName: string = Default.FILE
+    public static klausSpace: string = ''
+    public static workspace: string = ''
 
-export function deactivate()
-{
-    if ( K.wartet ) clearTimeout( K.wartet )
-    K.augen.forEach( ( w ) => w.dispose() )
-    K.saveState()
-    Logger.log( '🔌 Klaus\'C0dehelfer deaktiviert…' )
-}
-
-// → Master Functions:
-//  1st up: handle all those heaps of thrash Klaus and Stefan produced in earlier versions.
-function handleLegacyBugs(): void
-{
-    // a7 Bug: Hook-Pfade in globalState → a8 räumt auf
-    const legacyGlobal = Context.get().globalState.get<string>( StateKey.DEPRECATED_GLOBAL )
-    if ( legacyGlobal ) {
-        Logger.log( `🩹 handleLegacyBugs: Entferne Klaus-Hooks aus globalem State` )
-        const stateFileStem = Context.active( ConfigKey.FILE ) || K.defName
-        try {
-            const js = K.parseJSON( fs.readFileSync( legacyGlobal, 'utf-8' ) )
-            if ( js.hooks?.UserPromptSubmit ) {
-                js.hooks.UserPromptSubmit.forEach( ( entry: any ) =>
-                {
-                    if ( entry.hooks ) {
-                        entry.hooks = entry.hooks.filter(
-                            ( hook: any ) => !(
-                                hook.type === 'command' &&
-                                hook.command === 'node' &&
-                                hook.args?.length === 2 &&
-                                hook.args[ 0 ]?.includes( 'hook-handler.js' ) &&
-                                hook.args[ 1 ]?.includes( stateFileStem )
-                            )
-                        )
-                    }
-                } )
-            }
-            fs.writeFileSync( legacyGlobal, JSON.stringify( js, null, 2 ) )
-            Logger.log( `🩹 Klaus-Hooks aus ${legacyGlobal} entfernt.` )
-        } catch ( err ) {
-            Logger.debug( `🩹 Fehler beim Cleanup von ${legacyGlobal}: ${err}` )
-        }
-        Context.get().globalState.update( StateKey.DEPRECATED_GLOBAL, undefined )
-    }
-
-    // Legacy: State-Keys löschen (nicht mehr nötig)
-    Context.get().globalState.update( StateKey.DEPRECATED_WORKSPACE, undefined )
-    Context.get().workspaceState.update( StateKey.DEPRECATED_WORKSPACE, undefined )
-}
-//  2nd: handle a version bump (does not matter if up or down…)
-function handleUpgrade(): void
-{
-    const currentPath = Context.path()
-    const lastKnownPath = Context.state( StateKey.LASTPATH )
-    Context.setState( StateKey.LASTPATH, currentPath )
-
-    Logger.debug( `🗹🗷 handleUpgrade()` )
-    if ( lastKnownPath && currentPath !== lastKnownPath ) {
-        Logger.log( `♻️ Version change detected!` )
-        Logger.debug( `🔧  Old: ${K.getRelativePath( lastKnownPath )}` )
-        Logger.debug( `🔧  New: ${K.getRelativePath( currentPath )}` )
-    } else if ( !lastKnownPath )
-        Logger.log( `🆕 First run: initializing persistent storage` )
-}
-//  VSCode callback #1 → User selects or changes the workspace.
-function handleWorkspaceChange(): void
-{
-    Logger.debug( `🗹🗷 handleWorkspaceChange( ${vscode.workspace.name} )` )
-
-    const newDatei = K.getDateiName()
-
-    if ( newDatei ) {   // Informationen beschaffen
-        K.file = newDatei
-        const mode = Context.active( ConfigKey.MODE )
-        const isActive = mode !== 'none'
-        const fromOverride = Context.project( ConfigKey.MODE ) === undefined
-
-        // Wenn der Nutzer kein Feedback für Klaus wünscht, sollte auch "altes Feedback"
-        if ( mode === 'none' ) K.log = new WorkspaceChangeLog() // entfernt werden!
-        else K.loadState()
-        // Klaus (de)aktivieren…
-        let _base = vscode.workspace.workspaceFolders![ 0 ].uri.fsPath // Fallback.
-        if ( K.file.length )
-            // KlausDatei hat den Pfad schon bestimmt.  Von ${baseDir}/.vscode/klausfile zu baseDir:
-            _base = path.dirname( path.dirname( K.file ) )
-        updateKlausHook( path.join( _base, '.claude', 'settings.local.json' ), K.file, isActive )
-        // Watcher aktivieren
-        let wcnt = setupWatchers( isActive )
-        // Korrekte Ausgabe mit Warnung - sollte nur noch 1x erfolgen.
-        if ( !isActive || wcnt > ( vscode.workspace.workspaceFolders?.length || 1 ) ) {
-            Logger.log( `📋 Workspace '${vscode.workspace.name}' selected: `
-                + modeIcon( mode ) + scopeIcon( fromOverride )
-                + `#${wcnt}:${Context.active( ConfigKey.FILE )}` )
-            if ( mode !== Context.project( ConfigKey.MODE ) ) { // Warnung vor dem Hund
-                if ( mode === 'none' )
-                    Logger.log( `⚠️  Klaus erhält KEINE Daten (Workspace deaktiviert, Folder="${Context.project( ConfigKey.MODE )}")!` )
-                else
-                    Logger.log( `⚠️  Klaus Daten werden VERSCHLUCKT (Folder deaktiviert, Workspace="${mode}")!` )
-            }
-            K.init = true
-        } else Logger.debug( `📋 Workspace '${vscode.workspace.name}' reconfigured.` )
-    } else {
-        if ( K.file !== '' ) {
-            K.file = ''
-            Logger.log( `😴 No workspace open ⇒ Klaus\'C0dehelfer inaktiv.` )
-            K.init = true
-        }
-    }
-    dbgCfg()
-}
-//  VSCode callback #2 → User changed a setting OR VScode is telling us current settings that are non-default
-function handleConfigChange( e: vscode.ConfigurationChangeEvent ): void
-{
-    if ( e.affectsConfiguration( ConfigKey.INCL ) && K.incl !== Context.active( ConfigKey.INCL ) ) {
-        Logger.log( `🔁 Watchers need reconfiguration!` )
-        setupWatchers( Context.active( ConfigKey.MODE ) !== 'none' )
-    } else if ( ( e.affectsConfiguration( ConfigKey.MODE ) && K.mode !== Context.active( ConfigKey.MODE ) )
-        || ( e.affectsConfiguration( ConfigKey.FILE ) && K.file !== Context.active( ConfigKey.FILE ) )
-        || !K.init
-    ) {
-        if ( !K.init ) K.init = true
-        else Logger.log( `🔁 Configuration change detected!` )
-        handleWorkspaceChange()
-    } else Logger.debug( `🔄 unimportant Configuration change detected.` )
-}
-// → Secondary Functions
-function updateKlausHook( settingsFile: fs.PathLike, klaus: fs.PathLike, set: boolean )
-{
-    /**
-     *  Hooks setzen und wieder lösen - wie ist das sinnvoll erledigt, welche Parameter werden gebraucht?
-     *  → der Hook braucht sein Target Executable
-     *  → der Hook braucht die KlausDatei, damit er weiss, wo zu lesen ist.
-     *  → eine wiederverwendbare Funktion würde add/remove/update auf einmal können
-     *  → der Hook braucht auch einen Pfad, wo er installiert werden soll
-     *  ( zuerst ein Helfer-Lambda)
-     **/
-    const klausHookJSON = ( klaus: fs.PathLike ) =>
-        ( { type: 'command', command: 'node', args: [ `${path.join( Context.path(), 'dist', 'KlausHaken.js' )}`, klaus ] } )
-    // Settings-File laden (oder erstellen)
-    const js = K.parseJSON( fs.existsSync( settingsFile ) ? fs.readFileSync( settingsFile, 'utf-8' ) : '{}' )
-    // Egal ob gelöscht werden soll, oder gesetzt.  Einen bestehenden Hook müssen wir zuerst entfernen
-    if ( js.hooks && js.hooks.UserPromptSubmit ) {            // Also wird gegen die Parameter gefiltert! (die exe könnte sich bei Versionsbumps ändern!)
-        js.hooks.UserPromptSubmit.forEach( ( entry: any ) =>
-        {
-            if ( entry.hooks ) {
-                entry.hooks = entry.hooks.filter(
-                    ( hook: any ) => !( hook.type === 'command' && hook.command === 'node' && hook.args.length === 2 && hook.args[ 1 ] === klaus )
-                )
-            }
-        } )
-    }
-    if ( set ) {
-        // Sicherstellen, dass die Struktur existiert
-        if ( !js.hooks ) js.hooks = {}
-        if ( !js.hooks.UserPromptSubmit ) js.hooks.UserPromptSubmit = [ { hooks: [ klausHookJSON( klaus ) ] } ]
-        else // eigenen Hook setzen
-            js.hooks.UserPromptSubmit[ 0 ].hooks.push( klausHookJSON( klaus ) )
-    }
-    try {
-        fs.writeFileSync( settingsFile, JSON.stringify( js, null, 2 ) )
-        Logger.log( `✅ Hook ` + ( set ? `written to` : `cleared from` ) + ` ${settingsFile}` )
-    } catch ( err ) {
-        if ( set )
-            Logger.log( `⛔ Hook setup to ${settingsFile} FAILED!` )
-    }
-}
-
-function setupWatchers( enabled: boolean ): number
-{
-    const make = ( b: vscode.Uri, p: string, c: boolean ): vscode.FileSystemWatcher =>
-        ( vscode.workspace.createFileSystemWatcher( new vscode.RelativePattern( b, p ), !c, c, c ) )
-    // Falls schon Watcher existieren, werden sie vorher entfernt
-    Logger.debug( `🗹🗷 setupWatchers( ${enabled} ) - count at start: ${K.augen.length}` )
-
-    K.augen.length = 0
-    const wsf = vscode.workspace.workspaceFolders?.[ 0 ]
-    if ( enabled && wsf ) {
-        let patterns = Context.active( ConfigKey.INCL ) as string[]
-        patterns.forEach( ( pattern ) =>
-        {
-            const watcher = make( wsf.uri, pattern, false )
-            watcher.onDidChange( ( uri ) => trackFileChange( uri.fsPath ) )
-            K.augen.push( watcher )
-        } )
-        const danke = K.file + `.danke`
-        const watcher = make( vscode.Uri.file( path.dirname( danke ) ), path.basename( danke ), true )
-        watcher.onDidCreate( ( uri ) => { dankeSchoen( uri ) } )
-        K.augen.push( watcher )
-        Logger.debug(
-            `🔍 Klaus wartet auf Dateiänderungen… (…${K.augen.length} FileSystemWatchers are listening for changes…)`
-        )
-    } else {
-        Logger.debug( '🔇 alle Watcher gelöscht…' )
-    }
-    return K.augen.length
-}
-
-// Ternary Functions: own callbacks that make Klaus work.
-function dankeSchoen( uri: vscode.Uri ): void
-{
-    Logger.log( `🙏 Danke received: hook has read state…` )
-    K.log = new WorkspaceChangeLog()
-    try {
-        fs.unlinkSync( uri.fsPath )
-        Logger.debug( `🧹 Danke file cleaned up` )
-    } catch ( err ) {
-        Logger.debug( `ℹ️  Could not delete danke file: ${err}` )
-    }
-    K.saveStateDebounced()
-}
-
-function trackFileChange( filePath: string ): void
-{
-    // Der einmalige Helfer wird wieder zum Lambda.
-    const isExcluded = ( filePath: string ): boolean =>
+    public static gutenMorgen(): void
     {
-        return ( Context.active( ConfigKey.EXCL ) as string[] )?.some( ( pattern ) =>
-        { // Escape the patterns
-            const escaped = pattern
-                .replace( /\./g, '\\.' )
-                .replace( /\*/g, '[^/]*' )
-                .replace( /\?/g, '[^/]' )
-                .replace( /\*\*/g, '.*' )
-            let regex = new RegExp( `(^|/)${escaped}($|/)` )
-            return regex.test( filePath )
-        } )
+        K.inclChanged(); K.exclChanged(); K.fileChanged()
+        Logger.log( `🕵️ Klaus\'C0dehelfer initialisiert: ${K.modeChanged()}…` )
     }
-    if ( isExcluded( filePath ) ) Logger.debug( `🚫 Excluded: ${filePath}` )
-    else {
-        const relativePath = K.getRelativePath( filePath )
-        if ( !K.log.files.includes( relativePath ) ) {
-            K.log.files.push( relativePath )
-            Logger.log( `✏️  [${new Date().toISOString()}] ${relativePath}` )
+    public static guteNacht(): void
+    {
+        K.schlaf()
+        Logger.log( '🔌 Klaus\'C0dehelfer deaktiviert…' )
+    }
+    static schlaf(): void
+    {
+        if ( K.wartet ) clearTimeout( K.wartet )
+        Hand.weg()
+        Augen.zu()
+        K.sichern()
+    }
+    // Der Dateiname muss erst "errechnet" werden
+    public static dateiName(): string | undefined
+    {
+        const stem = Context.active( CKey.FILE ) || K.defName
+        const filename = `${stem}.json`
+
+        let workspaceRoot = vscode.workspace.name
+
+        if ( workspaceRoot !== undefined ) {
+            if ( vscode.workspace.workspaceFile ) {
+                workspaceRoot = path.dirname( vscode.workspace.workspaceFile.fsPath )
+                Logger.debug( `🔍 Using workspaceFile dir: ${workspaceRoot}` )
+            } else if ( vscode.workspace.workspaceFolders?.length ) {
+                workspaceRoot = vscode.workspace.workspaceFolders[ 0 ].uri.fsPath
+                Logger.debug( `🔍 Using workspaceFolders[0]: ${workspaceRoot}` )
+            }
         } else {
-            Logger.debug( `⏭️  Already tracked: ${relativePath}` )
+            Logger.debug( `🔍 No workspace folder…` )
         }
-        K.saveStateDebounced()
+        if ( workspaceRoot )
+            workspaceRoot = path.join( workspaceRoot, '.vscode', filename )
+        return workspaceRoot
+    }
+    // auch dies ist eine interne Helferfunktion.
+    public static relPfad( filePath: string ): string
+    {
+        // Relative Pfade - relativ zum Workspace?
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder( vscode.Uri.file( filePath ) )
+        if ( workspaceFolder ) return path.relative( workspaceFolder.uri.fsPath, filePath )
+        else if ( Context.get().storageUri ) { // try to make relative to workspace storage
+            const rp = path.relative( path.dirname( Context.get().storageUri!.fsPath ), filePath )
+            if ( rp.length ) return rp
+        }
+        return filePath
+    }
+    public static laden(): boolean  // is the state valid after this operation?
+    {
+        const dat = K.file
+        if ( dat )
+            try {
+                Logger.debug( `📂 loadState: ${K.log.load( dat )}` )
+            } catch ( err ) {
+                K.log = new WorkspaceChangeLog
+                Logger.error( `⛔ Failed to load state: ${err} → state reset to "now".` )
+            }
+        else {
+            K.log = new WorkspaceChangeLog
+            Logger.log( `⛔ no state to load.` )
+        }
+        return true
+    }
+    public static sichern(): void
+    {
+        try {
+            if ( K.file )
+                Logger.debug( `💾 State: ${K.log.save( K.file )}` )
+        } catch ( err ) {
+            Logger.error( `⛔ Failed to save state: ${err}` )
+        }
+    }
+    public static baldSichern(): void
+    {
+        if ( !K.wartet && K.file ) {
+            try {
+                K.log.lock( `${K.file}.lock` )
+                Logger.debug( `🔒 Lock set (debounce started)` )
+            } catch ( err ) {
+                Logger.debug( `⚠️  Could not set lock on debounce: ${err}` )
+            }
+        }
+        if ( K.wartet ) clearTimeout( K.wartet )
+        K.wartet = setTimeout( () => { K.sichern() }, 3000 )
+    }
+    public static willNicht( fn: string ): boolean
+    {
+        return K.excl.some( re => re.test( fn ) )
+    }
+    public static exclChanged(): string | undefined
+    {
+        const el = Context.active( CKey.EXCL ) as string[] || undefined
+        let neu = ( el ? el : Default.EXCL ).map( _ => new RegExp( `(^|/)${_
+            .replace( /\./g, '\\.' )
+            .replace( /\*/g, '[^/]*' )
+            .replace( /\?/g, '[^/]' )
+            .replace( /\*\*/g, '.*' )
+            }($|/)` ) )
+        let anders = K.excl ? neu.some( ( r, i ) => ( K.excl.at( i ) !== r ) ) : Boolean( neu )
+        if ( anders ) {
+            K.excl = neu
+            return `🚫 Klaus spart sich ein paar Dateien…`
+        }
+    }
+    public static inclChanged(): string | undefined
+    {
+        let anders = false
+        const neu = Context.active( CKey.INCL ) as string[]
+        neu.forEach( i => { if ( !K.incl.find( s => s === i ) ) anders = true } )
+        if ( anders ) {
+            K.incl = neu
+            if ( K.mode !== 'none' ) Augen.auf( neu, K.file + `.danke`, ( f => K.dateiAnders( f ) ), ( d => K.dankeSchoen( d ) ) )
+            return `🗂️ Klaus schaut nun anders hin…`
+        }
+    }
+    public static fileChanged(): string | undefined
+    {
+        const neu = K.dateiName()
+        if ( K.file ) {
+            if ( K.file !== neu ) {
+                if ( ( K.mode !== 'none' ) && ( K.workspace ) && neu ) {   // Wir sind aktiv → die Umbenennung hat Seiteneffekte!
+                    const nd = path.dirname( neu )
+                    const od = path.dirname( K.file )
+                    if ( nd === od ) {   // Die Klausdatei innerhalb eines Workspace muss umbenannt werden!
+                        if ( fs.existsSync( K.file ) ) { fs.renameSync( K.file, neu ) }
+                        const osd = path.join( od, path.basename( K.file, `.json` ) )
+                        const nsd = path.join( nd, path.basename( neu, `.json` ) )
+                        if ( fs.existsSync( osd ) ) { fs.renameSync( osd, nsd ) }
+                    }
+                }
+                K.file = neu
+                K.sichern()
+                if ( neu ) return `📝 KlausDatei geändert zu: '${path.basename( neu, `.json` )}'`
+            }
+        } else K.file = neu // Initialisierung → Name ist damit festgelegt.
+    }
+    public static modeChanged(): string | undefined
+    {
+        const nm = Context.active( CKey.MODE )
+        if ( K.mode !== nm ) {
+            let t = `Modus = ${modeIcon( K.mode )} 🔀 ${modeIcon( nm )}`
+            K.mode = nm
+            this.workspaceChanged()
+            return t
+        }
+    }
+    public static workspaceChanged(): void
+    {
+        Logger.debug( `🗹🗷 handleWorkspaceChange( ${vscode.workspace.name} )` )
+        // neue workspace-Folder bestimmen
+        const nws = vscode.workspace.workspaceFile ? path.dirname( vscode.workspace.workspaceFile.fsPath ) : vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[ 0 ].uri.fsPath : ``
+        let umbau = true
+        // Vorbereitungen treffen
+        if ( K.workspace ) K.schlaf()    // Da wir den vorherigen Modus nicht kennen (wollen) → Ruhe!
+        if ( K.workspace !== nws ) {    // Workspace ändert sich - auf die eine oder andere Weise
+            K.fileChanged()             // → Dateinamen und Pfade aktualisieren
+            K.workspace = nws
+            K.klausSpace = path.join( nws, `.vscode`, Context.active( CKey.FILE ) )
+            umbau = false
+        } // Innerhalb des Workspace änderte sich etwas... modus oder folders (keine Vorbereitung nötig)
+        // Jetzt den aktuellen Zustand herstellen
+        let futter, finger: boolean = false
+        let glotzn: number = 0
+        const isActive = ( K.mode !== 'none' && K.workspace && K.file )
+        if ( isActive ) {
+            futter = K.laden()
+            finger = Hand.dran( K.workspace, K.file! )
+            glotzn = Augen.auf( K.incl, K.file + `.danke`, ( f => K.dateiAnders( f ) ), ( d => K.dankeSchoen( d ) ) )
+        } else {    // Wenn der Nutzer kein Feedback für Klaus wünscht, sollte auch
+            K.log = new WorkspaceChangeLog() // "altes Feedback" entfernt werden!
+            K.sichern()
+        }
+        if ( isActive )
+            Logger.log( `📋 Workspace '${vscode.workspace.name}' ${umbau ? `umkonfiguriert` : `ausgewählt`}: `
+                + modeIcon( K.mode ) + scopeIcon(
+                    ( Context.active( CKey.MODE ) !== Context.global( CKey.MODE ) ) ||
+                    ( Context.active( CKey.MODE ) !== Context.project( CKey.MODE ) ) )
+                + `#${glotzn}:'${Context.active( CKey.FILE )}'` + ( futter ? ` (fresh) ` : ` ` ) + ( finger ? `🟢` : `⭕` ) )
+        else {
+            K.file = undefined
+            Logger.log( `😴 Klaus\'C0dehelfer träumt von 🌞` )
+        }
+    }
+    public static dateiAnders( f: string ): void
+    {
+        if ( K.willNicht( f ) ) Logger.debug( `🚫 Excluded: ${f}` )
+        else {
+            const relativePath = K.relPfad( f )
+            if ( K.log.push( relativePath ) ) {
+                Logger.log( `✏️  [${new Date().toISOString()}] ${relativePath}` )
+                K.baldSichern()
+            } else Logger.debug( `⏭️  Already tracked / no changes: ${relativePath}` )
+        }
+    }
+    public static dankeSchoen( f: string ): void
+    {
+        Logger.log( `🙏 Danke received: hook has read state…` )
+        K.log.danke( f )
     }
 }
-
 
 // Debugging-Helfer (warum nur an einer Stelle den "guten" ouput haben?)
 function dbgCfg()
 {
-    const gm = Context.global( ConfigKey.MODE )
-    const gf = Context.global( ConfigKey.FILE ) || K.defName
-    const pm = Context.project( ConfigKey.MODE )
-    const pf = Context.project( ConfigKey.FILE ) || K.defName
-    const am = Context.active( ConfigKey.MODE )
-    const af = Context.active( ConfigKey.FILE ) || K.defName
+    const gm = Context.global( CKey.MODE )
+    const gf = Context.global( CKey.FILE ) || K.defName
+    const pm = Context.project( CKey.MODE )
+    const pf = Context.project( CKey.FILE ) || K.defName
+    const am = Context.active( CKey.MODE )
+    const af = Context.active( CKey.FILE ) || K.defName
     const ia = gm !== 'none' || pm !== 'none' || am !== 'none'
 
     Logger.debug( `📝 current Klaus'C0dehelfer configuration:` )
@@ -282,11 +242,11 @@ function dbgCfg()
     Logger.debug( `${ia ? `✅` : `❎`} ACTIVE: ⇒mode ${modeIcon( am )}, ⇒stateFile=${af}` )
     if ( vscode.workspace.workspaceFolders ) {
         Logger.debug( `🗃️ Workspace folders: ` )
-        vscode.workspace.workspaceFolders.forEach( f => { Logger.debug( `  📂 ${K.getRelativePath( f.uri.fsPath ) || f.uri.fsPath}` ) } )
+        vscode.workspace.workspaceFolders.forEach( f => { Logger.debug( `  📂 ${K.relPfad( f.uri.fsPath ) || f.uri.fsPath}` ) } )
     }
     Logger.debug( `⌚ lastKlaus: ${K.log.lastClaude}` )
-    if ( K.log.files.length ) {
+    if ( K.log.files.size ) {
         Logger.debug( `📑 files changed:` )
-        K.log.files.forEach( ( f ) => Logger.debug( `  💾 ${K.getRelativePath( f )}` ) )
+        K.log.files.forEach( ( f ) => Logger.debug( `  💾 ${K.relPfad( f )}` ) )
     }
 }

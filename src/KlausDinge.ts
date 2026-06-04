@@ -1,6 +1,8 @@
 import * as vscode from 'vscode'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as diff from 'diff'
+import { ExtName, ConfigKey, CKey, Default } from "./KlausKonstanten.generated"
 
 // → Globalisierung von Parametern / Strings / Interfaces
 const SCOPE_ICONS: string[] = [ `🌐`, `🏭` ]    // sozusagen global vs. firma ... doofes Emoticon.
@@ -14,131 +16,146 @@ export enum StateKey
     DEPRECATED_WORKSPACE = 'Klaus.workspace', // Workspace-Klaus
     LASTPATH = 'Klaus.platz'      // Extension Pfad
 }
-export enum ConfigKey
+// → unser Informationsträger für Klaus
+export interface HookData
 {
-    MODE = 'awarenessMode',
-    FILE = 'stateFileName',
-    INCL = 'includePatterns',
-    EXCL = 'excludePatterns'
+    lastClaude: string
+    files: string[]
+    diffs: string[]
 }
-
 // → unser Datenträger …
 export class WorkspaceChangeLog
 {
     lastClaude: string = new Date().toISOString()
-    files: string[] = []
-    public reset( parsed?: any )
+    files: Set<string> = new Set()
+    saved: Set<string> = new Set()
+    diffs: string[] = []
+    file: string = ``
+    flock: string = ``
+    public load( fn: string ): string
     {
-        this.lastClaude = parsed?.lastClaude || new Date().toISOString()
-        this.files = parsed?.files || []
+        this.file = fn
+        // saved aus Snapshots rekonstruieren
+        let schnapps = path.join( path.dirname( fn ), path.basename( fn, `.json` ) )
+        this.saved = new Set()
+        if ( fs.existsSync( schnapps ) ) {
+            const snapFiles = fs.readdirSync( schnapps, { recursive: true } ) as string[]
+            snapFiles.forEach( ( f ) => this.saved.add( path.relative( schnapps, f ) ) )
+        } // So, erstmal was getrunken …
+        if ( fs.existsSync( fn ) ) {
+            const data = fs.readFileSync( fn, 'utf-8' )
+            const parsed = JSON.parse( data ) as HookData
+            this.lastClaude = parsed.lastClaude || new Date().toISOString()
+            this.files = new Set( parsed.files || [] )
+            this.diffs = parsed.diffs || []
+            return `lastClaude=${this.lastClaude}, files=${this.files.size}, diffables=${this.saved.size}`
+        } else
+            return `file not found at ${fn} → state reset to "now".`
     }
-}
-// → unser aktueller (globaler) Zustand
-export class K
-{
-    public static mode: string = 'none'
-    public static file: string = ''
-    public static incl: string[] = []
-    public static init: boolean = false
-    public static augen: vscode.FileSystemWatcher[] = []
-    public static log: WorkspaceChangeLog = new WorkspaceChangeLog()
-    public static wartet: NodeJS.Timeout | null = null
-    public static defName: string = ''
-
-    // JSON.parse wirft immer bei Fehlern - ich hasse sowas! (try-catch-wrapper)
-    public static parseJSON( str: string ): any { try { return JSON.parse( str ) } catch { return {} } }
-    // Der Dateiname muss erst "errechnet" werden
-    public static getDateiName(): string | undefined
+    public save( fn: string, noUnlock: boolean = false ): string
     {
-        const stem = Context.active( ConfigKey.FILE ) || K.defName
-        const filename = `${stem}.json`
-
-        let workspaceRoot = vscode.workspace.name
-
-        if ( workspaceRoot !== undefined ) {
-            if ( vscode.workspace.workspaceFile ) {
-                workspaceRoot = path.dirname( vscode.workspace.workspaceFile.fsPath )
-                Logger.debug( `🔍 Using workspaceFile dir: ${workspaceRoot}` )
-            } else if ( vscode.workspace.workspaceFolders?.length ) {
-                workspaceRoot = vscode.workspace.workspaceFolders[ 0 ].uri.fsPath
-                Logger.debug( `🔍 Using workspaceFolders[0]: ${workspaceRoot}` )
-            }
-        } else {
-            Logger.debug( `🔍 No workspace folder…` )
+        if ( this.file !== fn ) {
+            if ( fs.existsSync( this.file ) ) fs.unlinkSync( this.file )
+            this.file = fn
         }
-        if ( workspaceRoot )
-            workspaceRoot = path.join( workspaceRoot, '.vscode', filename )
-        return workspaceRoot
+        this.lock( fn )    // silent fail if already set.
+        fs.writeFileSync( fn, JSON.stringify( {
+            lastClaude: this.lastClaude,
+            diffs: this.diffs,
+            files: Array.from( this.files )
+        }, null, 2 ) )
+        if ( !noUnlock ) this.done()
+        return `saved to ${fn}`
     }
-    // auch dies ist eine interne Helferfunktion.
-    public static getRelativePath( filePath: string ): string
+    public lock( fn: string )
     {
-        // Relative Pfade - relativ zum Workspace?
-        const workspaceFolder = vscode.workspace.getWorkspaceFolder( vscode.Uri.file( filePath ) )
-        if ( workspaceFolder ) return path.relative( workspaceFolder.uri.fsPath, filePath )
-        else if ( Context.get().storageUri ) { // try to make relative to workspace storage
-            const rp = path.relative( path.dirname( Context.get().storageUri!.fsPath ), filePath )
-            if ( rp.length ) return rp
+        if ( !this.flock ) {
+            this.flock = `${fn}.lock`
+            const dir = path.dirname( fn )
+            if ( !fs.existsSync( dir ) ) fs.mkdirSync( dir, { recursive: true } )
+            if ( !fs.existsSync( this.flock ) ) fs.writeFileSync( this.flock, '' )
         }
-        return filePath
     }
-    public static loadState(): boolean  // is the state valid after this operation?
+    public done()
     {
-        const dat = K.file
-        if ( dat.length )
+        if ( this.flock ) {
+            fs.unlinkSync( this.flock )
+            this.flock = ``
+        }
+    }
+    verzeichnisse(): string[]
+    {
+        let ks = path.dirname( this.file )
+        let ws = path.dirname( ks )
+        return [ ws, path.join( ks, path.basename( this.file, `.json` ) ) ]
+    }
+    public danke( thk: string )
+    {   /** Danke-Flow: ab jetzt auch logisch…
+         *  → lock setzen
+         *  → Aufgabenliste erstellen
+         *  → datafile und statefile aktualisieren (lock wird gelöst)
+         *  → Aufgaben abarbeiten (Dateien kopieren)
+         */
+        this.lock( this.file ) // wir werden speichern! Atomare Operationen zuerst!
+        const toSnapshot = [ ...this.files ]  // Kopie
+        this.files = new Set()  // ← Sofort leeren!
+        this.lastClaude = new Date().toISOString()  // ← Timestamp setzen
+        toSnapshot.forEach( ( fn ) => this.saved.add( fn ) )
+        if ( fs.existsSync( thk ) ) { fs.unlinkSync( thk ); Logger.debug( `🧹 Danke file cleaned up` ) }
+        this.save( this.file )
+        let [ ws, ks ] = this.verzeichnisse()
+        // 2. LANGSAM: Snapshot-Loop (neue files können jetzt reingedrückt werden)
+        for ( const relFilePath of toSnapshot ) {
+            const snapPath = path.join( ks, relFilePath )
+            const sourcePath = path.join( ws, relFilePath )
             try {
-                if ( fs.existsSync( dat ) ) {
-                    const data = fs.readFileSync( dat, 'utf-8' )
-                    const parsed = JSON.parse( data )
-                    K.log.reset( parsed )
-                    Logger.debug( `📂 loadState: loaded ${K.log.files.length} files, lastClaude=${K.log.lastClaude}` )
-                } else {
-                    K.log.reset()
-                    Logger.debug( `📂 loadState: file not found at ${dat} → state reset to "now".` )
+                const content = fs.readFileSync( sourcePath, 'utf-8' )
+                fs.mkdirSync( path.dirname( snapPath ), { recursive: true } )
+                fs.writeFileSync( snapPath, content )
+            } catch ( err ) {
+                // Fehler? Datei gelöscht oder permission issue
+                this.saved.delete( relFilePath )
+                this.save( this.file ) // sofortiges Entfernen aus der eigentlich schon vorbereiteten Liste.
+            }
+        }
+    }
+    public push( fn: string ): boolean
+    {   /** Wie machen wir das hier genau?  Sehr einfach.
+         *  - wir haben den Workspace-relative file path als fn.
+         *  - wir brauchen ein Diff zum letzten gespeicherten Zustand.
+         *  → Ist die betreffende Datei schon in "files" aufgeführt?
+         *      ( würde bedeuten: Snapshot lag bei erster Änderung nicht vor )
+         *    ✔ keine Änderung
+         *    ✘ gibt es einen Snapshot der Datei ?
+         *      ✘ füge Datei zu "files" hinzu, speichere keinen Snapshot
+         *      ✔ → beschaffe Diff
+         *        → speichere aktuellen Stand als Snapshot
+         *        → falls Diff leer ist: keinen Eintrag erstellen.
+         */
+        if ( !this.files.has( fn ) ) {
+            let [ ws, ks ] = this.verzeichnisse()
+            let snapName = path.join( ks, fn )
+            if ( fs.existsSync( snapName ) ) {
+                let fileName = path.join( ws, fn )
+                // Read old snapshot file
+                const oldContent = fs.readFileSync( snapName, 'utf-8' )
+                // Read current file
+                const newContent = fs.readFileSync( fileName, 'utf-8' )
+                // Generate unified diff using jsdiff
+                const ud = diff.createTwoFilesPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2 } )
+                if ( ud.length ) {                              // changes detected:
+                    this.diffs.push( ud )                       // → record change
+                    fs.writeFile( snapName, newContent, 'utf-8',// → update snapshot
+                        ( err ) => { Logger.error( `🚫 failed to update snapshot: ${err}, file: '${snapName}'` ) } )
+                    return true                                 // → tell upstream about a real change
                 }
-            } catch ( err ) {
-                K.log.reset()
-                Logger.error( `⛔ Failed to load state: ${err} → state reset to "now".` )
-            }
-        else {
-            K.log.reset()
-            Logger.log( `⛔ no state to load.` )
-        }
-        return true
-    }
-    public static saveState(): void
-    {
-        try {
-            const absolutePath = K.file
-            if ( absolutePath.length ) {
-                const lockPath = `${absolutePath}.lock`
-                const dir = path.dirname( absolutePath )
-                if ( !fs.existsSync( dir ) ) fs.mkdirSync( dir, { recursive: true } )
-                if ( !fs.existsSync( lockPath ) ) fs.writeFileSync( lockPath, '' )
-                fs.writeFileSync( absolutePath, JSON.stringify( K.log, null, 2 ) )
-                fs.unlinkSync( lockPath )
-                Logger.debug( `💾 State saved to ${absolutePath}` )
-            }
-        } catch ( err ) {
-            Logger.error( `⛔ Failed to save state: ${err}` )
-        }
-    }
-    public static saveStateDebounced(): void
-    {
-        if ( !K.wartet && K.file.length ) {
-            try {
-                const dir = path.dirname( K.file )
-                if ( !fs.existsSync( dir ) ) fs.mkdirSync( dir, { recursive: true } )
-                fs.writeFileSync( `${K.file}.lock`, '' )
-                Logger.debug( `🔒 Lock set (debounce started)` )
-            } catch ( err ) {
-                Logger.debug( `⚠️  Could not set lock on debounce: ${err}` )
+            } else {
+                this.files.add( fn )    // Eine Änderung, nur die Ungenaue.
+                return true
             }
         }
-        if ( K.wartet ) clearTimeout( K.wartet )
-        K.wartet = setTimeout( () => { K.saveState() }, 3000 )
+        return false
     }
-
 }
 // → unser globaler ExtensionContext
 export class Context
@@ -150,7 +167,7 @@ export class Context
     }
     static get(): vscode.ExtensionContext { return Context.ctx }
     static path(): string { return Context.ctx.extension.extensionPath }
-    static extName(): string { return Context.ctx.extension.packageJSON.name }
+    static extName(): string { return ExtName }
     static state( key: StateKey ): string | undefined
     {
         switch ( key ) {
@@ -167,9 +184,9 @@ export class Context
             case StateKey.LASTPATH: Context.ctx.globalState.update( k, v ); break
         }
     }
-    static active( key: ConfigKey ): any { return vscode.workspace.getConfiguration( Context.extName() )?.get( key ) }
-    static global( key: ConfigKey ): any { return vscode.workspace.getConfiguration( Context.extName(), null )?.get( key ) }
-    static project( key: ConfigKey ): any
+    static active( key: CKey ): any { return vscode.workspace.getConfiguration( Context.extName() )?.get( key ) }
+    static global( key: CKey ): any { return vscode.workspace.getConfiguration( Context.extName(), null )?.get( key ) }
+    static project( key: CKey ): any
     {
         if ( vscode.workspace.name === undefined ) return undefined
         return vscode.workspace.getConfiguration( Context.extName(), vscode.workspace.workspaceFolders![ 0 ] )?.get( key )
@@ -184,10 +201,12 @@ export class Logger
     {
         const version = ( context.extension.packageJSON as any ).version || 'unknown'
         Logger.channel = vscode.window.createOutputChannel( "Klaus'C0dehelfer", { log: true } )
-        Logger.log( `🚀 Klaus'C0dehelfer version 📦${version} startet…` )
+        Logger.log( `⏰ Klaus'C0dehelfer version 📦${version} startet … 🚀` )
     }
     static log( msg: string ): void { Logger.channel.info( msg ) }
     static debug( msg: string ): void { Logger.channel.debug( msg ) }
     static error( msg: string ): void { Logger.channel.error( msg ) }
     static dispose(): void { Logger.channel.dispose() }
 }
+// JSON.parse wirft immer bei Fehlern - ich hasse sowas! (try-catch-wrapper)
+export function parseJSON( str: string ): any { try { return JSON.parse( str ) } catch { return {} } }

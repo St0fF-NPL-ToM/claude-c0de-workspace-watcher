@@ -2,7 +2,7 @@
   "name": "claude-c0de-workspace-watcher",
   "displayName": "Klaus'C0dehelfer",
   "description": "Passive filesystem awareness for Claude Code: tracks file changes and syncs with Claude's context",
-  "version": "0.5.1-a1",
+  "version": "0.5.2-a1",
   "publisher": "theObsessedManiacs",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
@@ -69,13 +69,15 @@
           ],
           "default": "none",
           "description": "Claude coworking awareness mode. Select 'On-Demand' or 'Real-Time' to enable and configure hooks.",
-          "scope": "resource"
+          "scope": "resource",
+          "name": "MODE"
         },
         "claude-c0de-workspace-watcher.stateFileName": {
           "type": "string",
           "default": "KlausC0deHelferData",
           "description": "Filename stem for workspace state tracking (without .json extension). E.g., 'KlausC0deHelferData' stores as '.vscode/KlausC0deHelferData.json'. The .json extension is automatically appended.",
-          "scope": "resource"
+          "scope": "resource",
+          "name": "FILE"
         },
         "claude-c0de-workspace-watcher.includePatterns": {
           "type": "array",
@@ -87,7 +89,8 @@
             "**/CMakeLists.txt"
           ],
           "description": "Glob patterns for files to monitor.",
-          "scope": "resource"
+          "scope": "resource",
+          "name": "INCL"
         },
         "claude-c0de-workspace-watcher.excludePatterns": {
           "type": "array",
@@ -106,7 +109,8 @@
             "**/*.dll"
           ],
           "description": "Glob patterns for files to exclude from monitoring.",
-          "scope": "resource"
+          "scope": "resource",
+          "name": "EXCL"
         }
       }
     }
@@ -114,19 +118,25 @@
   "scripts": {
     "vscode:prepublish": "npm run bundle",
     "bundle": "npm run bundle:ext && npm run bundle:hook",
-    "bundle:ext": "esbuild src/Klaus.ts --bundle --outfile=dist/Klaus.js --external:vscode --platform=node --minify --sourcemap",
+    "bundle:ext": "esbuild src/KlausCodeHelfer.ts --bundle --outfile=dist/Klaus.js --external:vscode --platform=node --minify --sourcemap",
     "bundle:hook": "esbuild src/KlausHaken.ts --bundle --outfile=dist/KlausHaken.js --platform=node --minify --sourcemap",
     "compile": "tsc --noEmit",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "generate:config": "ts-node scripts/generatePackageConstants.ts",
+    "prebuild": "npm run generate:config",
+    "build": "tsc"
   },
-  "dependencies": {},
+  "dependencies": {
+    "diff": "^9.0.0"
+  },
   "devDependencies": {
     "@tsconfig/bases": "^1.0.24",
     "@types/node": "^20.19.41",
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.28.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.0"
   }
 }
