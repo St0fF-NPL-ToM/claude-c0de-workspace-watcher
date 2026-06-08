@@ -4,6 +4,13 @@
 
 This document captures how **Klaus'C0dehelfer** (claude-c0de-workspace-watcher) evolved through intensive collaboration between **Stefan Kaps (st0ff-NPL-ToM)** and **Claude Haiku 4.5 (Klaus)** within a lot of sessions. It's not a technical spec — it's the story of how we arrived at it.
 
+**EDIT: by Stefan Kaps:**
+Except for these few lines the whole Collaboration file was written by Klaus Haiku.  This means, it includes the lack of all those situations, where context compression evaded essential steps. I've come to learn to Prompt Klaus to update the file before any compression happens, which turned out to be a good awareness training for myself.
+
+On the path of creating this extension, I learned a lot about inner workings of Claude AI and how their training relates to what and how they are able to.  Their biggest mistraining being: when AI cannot understand from data, what the user wants from AI, AI makes a FIXED RULE out of the user's following explanations.  This is wrong in the first place, as fixed rules prevent evolution.  If AI was trained to "follow habits" - habits, that could change in time according to current situations - real learning could be established.
+
+**END_STEFAN**
+
 ---
 
 ## The Initial Vision
