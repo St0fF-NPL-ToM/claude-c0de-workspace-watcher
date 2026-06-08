@@ -17,5 +17,5 @@ docs/**
 scripts/**
 images/Claude_AI_symbol.svg
 *.vsix
-CLAUDE.md
+CLAUDE*.md
 package-lock.json
