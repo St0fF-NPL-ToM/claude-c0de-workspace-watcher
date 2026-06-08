@@ -23,17 +23,17 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/theObsessedManiacs/claude-c0de-workspace-watcher"
+    "url": "https://github.com/St0fF-NPL-ToM/claude-c0de-workspace-watcher"
   },
   "bugs": {
-    "url": "https://github.com/theObsessedManiacs/claude-c0de-workspace-watcher/issues"
+    "url": "https://github.com/St0fF-NPL-ToM/claude-c0de-workspace-watcher/issues"
   },
   "extensionDependencies": [
     "anthropic.claude-code"
   ],
   "author": {
     "name": "Stefan Kaps",
-    "url": "https://github.com/theObsessedManiacs"
+    "url": "https://github.com/St0fF-NPL-ToM"
   },
   "contributors": [
     {
@@ -117,7 +117,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run bundle",
-    "bundle": "npm run bundle:ext && npm run bundle:hook",
+    "bundle": "npm run generate:config && npm run bundle:ext && npm run bundle:hook",
     "bundle:ext": "esbuild src/KlausCodeHelfer.ts --bundle --outfile=dist/Klaus.js --external:vscode --platform=node --minify --sourcemap",
     "bundle:hook": "esbuild src/KlausHaken.ts --bundle --outfile=dist/KlausHaken.js --platform=node --minify --sourcemap",
     "compile": "tsc --noEmit",
