@@ -2,7 +2,7 @@
 
 **Passive filesystem awareness for Claude Code** — automatically track file changes across your VSCode workspace and sync them to Claude via hooks.
 
-by `theObsessedManiacs` – **We never rule…** but this time, we lead Claude to rule VSCode. →
+by `an Obsessed Maniac` – **We never rule…** but this time, we lead Claude to rule VSCode. →
 
 ---
 
@@ -39,13 +39,13 @@ Once published to Open VSX / VS Marketplace:
 3. Click Install
 
 ### From Pre-Release VSIX
-1. Download `.vsix` from [GitHub Releases](https://github.com/the-Obsessed-Maniacs/claude-c0de-workspace-watcher/releases)
+1. Download `.vsix` from [GitHub Releases](https://github.com/St0fF-NPL-ToM/claude-c0de-workspace-watcher/releases)
 2. VSCode: `Extensions → Install from VSIX…`
 3. Select file, restart VSCode
 
 ### Build from Source
 ```bash
-git clone https://github.com/the-Obsessed-Maniacs/claude-c0de-workspace-watcher
+git clone https://github.com/St0fF-NPL-ToM/claude-c0de-workspace-watcher
 cd claude-c0de-workspace-watcher
 npm install
 npm run bundle
@@ -64,7 +64,9 @@ Klaus'C0dehelfer should be configured at the **workspace level** (`.vscode/setti
 
 If Klaus programmers in a project where he's also editing files, he receives a hint with every prompt about which files *he* changed. This creates confusion: *"Did the user change these files, or did I? What's happening here?"* The feature works best for collaborative coding (pair programming) where one person edits and Claude observes. Avoid enabling it globally if you're also using Claude Code to write code in this project.
 
-**Recommendation:** Use workspace-level configuration (`awarenessMode: onDemand` in `.vscode/settings.json`), not user-level globals.
+**Recommendation:** Use `workspace-level` configuration (`awarenessMode: onDemand` in `.vscode/settings.json`), change or append include and exclude filters as you need.
+
+*info:* include filters are applied first, at file system watcher creation level.  Exclude filters are applied after a file system watcher has fired.
 
 ---
 
@@ -73,7 +75,9 @@ If Klaus programmers in a project where he's also editing files, he receives a h
 Configure via one of these methods:
 - **VSCode Settings UI:** Extensions → Klaus'C0dehelfer
 - **Command Palette:** `Ctrl+Shift+P`, search "Klaus"
-- **Search Bar trick:** `Ctrl+Shift+P`, type ">Kl" (the `>` transforms search into command palette)
+- **Search Bar trick:** Type ">Kl" into the workspace search bar (the `>` transforms search into command palette)
+
+First: better decide to use workspace / folder settings by clicking the respective settings tab.
 
 Then select one of:
 - **`none`** (default): No tracking, no hooks
