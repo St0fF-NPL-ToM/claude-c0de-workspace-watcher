@@ -15,7 +15,12 @@
 
 Unified diff-generation system for both On-Demand and Real-Time Claude awareness modes. Both modes use identical data structures and algorithms; only the trigger and transfer mechanism differs.
 
-**Current implementation:** Single persistent state file with snapshot-based diffs.
+**Current implementation:** Single persistent state file with snapshot-based diffs. Injected with the next sent user prompt.
+
+We also had this great idea of "*immediate workspace change awareness*".
+What would this provide to Klaus?  What would it bring - maybe a pattern for validation?  But how to inject this into Klaus back again?
+
+These questions remain unanswered.  Unless an acceptable answer comes to mind, we won't take a go on an implementation.
 
 ---
 
@@ -58,7 +63,6 @@ Current vision proposed replacing file list with actual `git diff`-style unified
 {
   "lastClaude": "2026-06-03T12:00:00.000Z",
   "files": ["src/main.ts", "src/utils.ts"],
-  "saved": ["src/main.ts"],
   "diffs": ["diff --git a/src/main.ts b/src/main.ts\n..."]
 }
 ```
@@ -161,7 +165,7 @@ ${workspace_root}/.vscode/
 
 **STEM.json (Unified State + Content):**
 - `lastClaude: string` — timestamp of last report to Claude
-- `files: Set<string>` — current workspace changes since last `danke()`
+- `files: Set<string>` — current workspace changes since `lastClaude`
 - `diffs: Array<string>` — recorded unified diffs since `lastClaude`
 
 ### Design Advantages
