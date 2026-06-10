@@ -100,6 +100,7 @@ export class WorkspaceChangeLog
         const toSnapshot = [ ...this.files ]  // Kopie
         this.files = new Set()  // ← Sofort leeren!
         this.lastClaude = new Date().toISOString()  // ← Timestamp setzen
+        this.diffs = [] // diffs sind ephemeral!
         toSnapshot.forEach( ( fn ) => this.saved.add( fn ) )
         if ( fs.existsSync( thk ) ) { fs.unlinkSync( thk ); Logger.debug( `🧹 Danke file cleaned up` ) }
         this.save( this.file )
