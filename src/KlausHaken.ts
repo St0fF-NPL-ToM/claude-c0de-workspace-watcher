@@ -1,7 +1,34 @@
 import * as fs from 'fs'
 import { HookData } from './KlausDinge'
 
-interface HookInput { fn: string }
+const maxWaitMs = 5000
+
+class HookInput
+{
+  session_id: string = ``
+  transcript_path: string = ``
+  cwd: string = ``
+  permission_mode: string = ``
+  hook_event_name: string = ``
+  prompt: string = ``
+  public async init()
+  {
+    let isl = ''
+    for await ( const chunk of process.stdin ) { isl += chunk }
+    try {
+      const i = JSON.parse( isl ) as HookInput
+      this.session_id = i.session_id
+      this.transcript_path = i.transcript_path
+      this.cwd = i.cwd
+      this.permission_mode = i.permission_mode
+      this.hook_event_name = i.hook_event_name
+      this.prompt = i.prompt
+    }
+    catch ( err ) {
+      process.stderr.write( `[WARN] Could not read hook input data: ${err}\n` )
+    }
+  }
+}
 
 class HookOutput
 {
@@ -28,29 +55,27 @@ class HookOutput
 function sleep( ms: number ): Promise<void> { return new Promise( ( resolve ) => setTimeout( resolve, ms ) ) }
 async function handleUserPromptSubmit(): Promise<void>
 {
-  let isl = ''
-  let hi: HookInput
-  // Parameter erhalten (JSON input via stdin)
-  for await ( const chunk of process.stdin ) { isl += chunk }
-  try {
-    hi = JSON.parse( isl ) as HookInput
-    const lockFilePath = `${hi.fn}.lock` // `${hi.fn}.lock`
-    const thankYouPath = `${hi.fn}.danke`// `${hi.fn}.danke`
-
-    let maxWaitMs = 5000
+  // Hook-Prompt-Parameter erhalten (JSON input via stdin) [absolut unnötig - just for the future!]
+  const hi = new HookInput; hi.init()
+  // Parameter lesen
+  const fn = process.argv[ 2 ]
+  if ( fn ) {
+    const lockFilePath = `${fn}.lock` // `${hi.fn}.lock`
+    const thankYouPath = `${fn}.danke`// `${hi.fn}.danke`
     const startTime = Date.now()
     while ( fs.existsSync( lockFilePath ) ) {
       if ( Date.now() - startTime > maxWaitMs ) process.exit( 0 )
-      await sleep( 10 )
+      await sleep( 50 )
     }
     // read data
-    const data = JSON.parse( fs.readFileSync( hi.fn, 'utf-8' ) ) as HookData
+    const data = JSON.parse( fs.readFileSync( fn, 'utf-8' ) ) as HookData
     // say "thank you"
     fs.writeFileSync( thankYouPath, '' )
     // produce output
     console.log( JSON.stringify( new HookOutput( data ) ) )
-  } catch ( err ) {
-    process.stderr.write( `[WARN] Could not read data or create danke file: ${err}\n` )
+  } else {
+    process.stderr.write( `[ERROR] No data file path provided via argv[2]: '${fn}'\n` )
+    process.exit( 1 )
   }
 }
 
