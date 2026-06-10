@@ -38,7 +38,11 @@ export class Augen
     public static neu( b: vscode.Uri, p: string, c: boolean, cb: ( x: string ) => void ): number
     {
         const a = vscode.workspace.createFileSystemWatcher( new vscode.RelativePattern( b, p ), !c, c, c )
-        a.onDidChange( ( uri ) => cb( uri.fsPath ) )
+        if ( c ) a.onDidCreate( ( uri ) => cb( uri.fsPath ) )
+        else {
+            a.onDidChange( ( uri ) => cb( uri.fsPath ) )
+            a.onDidDelete( ( uri ) => cb( uri.fsPath ) )
+        }
         Augen.a.push( a )
         return Augen.a.length
     }
