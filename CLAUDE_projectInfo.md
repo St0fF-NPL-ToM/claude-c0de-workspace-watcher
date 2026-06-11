@@ -105,4 +105,4 @@ The next commit will include the incremented version. This ensures committed ver
 | `dist/Klaus.js` | 11KB | VSCode extension (bundled, minified) |
 | `dist/KlausHaken.js` | 1.5KB | Claude Code hook handler (bundled, minified) |
 
-**Versionsstand:** aktuell v0.5.1-a1
+**Versionsstand:** aktuell v0.5.3-a1

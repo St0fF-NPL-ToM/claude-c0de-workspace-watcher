@@ -143,11 +143,13 @@ export class WorkspaceChangeLog
                 // Read current file
                 const newContent = fs.readFileSync( fileName, 'utf-8' )
                 // Generate unified diff using jsdiff
-                const ud = diff.createTwoFilesPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2 } )
-                if ( ud.length ) {                              // changes detected:
-                    this.diffs.push( ud )                       // → record change
-                    fs.writeFile( snapName, newContent, 'utf-8',// → update snapshot
-                        ( err ) => { Logger.error( `🚫 failed to update snapshot: ${err}, file: '${snapName}'` ) } )
+                const di = diff.structuredPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2, stripTrailingCr: true } )
+                Logger.debug( `∂ :${JSON.stringify( di )}` )
+                if ( di.hunks.length ) {                            // changes detected:
+                    di.oldFileName = undefined
+                    this.diffs.push( `==diff: '${fn}'==\n` + diff.formatPatch( di, diff.OMIT_HEADERS ) )       // → record change
+                    fs.writeFile( snapName, newContent, 'utf-8',    // → update snapshot
+                        ( err ) => { if ( err ) Logger.error( `🚫 failed to update snapshot: ${err}, file: '${snapName}'` ) } )
                     return true                                 // → tell upstream about a real change
                 }
             } else {

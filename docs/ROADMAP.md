@@ -74,9 +74,12 @@
 - [x] **Ephemeral Diffs (v0.6.0):** WorkspaceChangeLog.push() generates unified diffs via jsdiff.createTwoFilesPatch()
 - [x] **Snapshot-based Diffs:** Files tracked → snapshots saved on `danke()` → diffs generated on next change
 - [x] **Code Quality:** Refactored for readability (Singletons, proper separation, semantic function ordering)
-- [ ] **End-to-end Testing:** Code complete and functional — awaiting real-world workspace testing
+- [x] **End-to-end Testing:** Code complete and functional — awaiting real-world workspace testing
+  - fixed malfunction in `hook`
+  - fixed malfunctioning `eyes`
+  - refactored diff-generation to better fit Klaus' requirements
 
-**Version:** v0.5.1-a0 → v0.6.0 (feature-complete, testing-pending)
+**Version:** 0.5.x → 0.5.3 (0.6-feature-complete, more-and-more-testing-pending)
 
 ---
 
@@ -84,7 +87,7 @@
 
 ### v0.6.0: Ephemeral Diffs (Elegant Approach)
 
-**Status:** ✅ Implementation complete. Awaiting real-world workspace testing.
+**Status:** ✅ Implementation complete. Awaiting real-world workspace testing. First results: very promising!
 
 See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details.
 
@@ -93,13 +96,10 @@ See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details.
 - ✅ Snapshot-based system: files tracked → snapshots saved → diffs on next change
 - ✅ Lock+Danke IPC: atomic state transitions, safe diff coordination
 - ✅ HookData format: diffs[], files[], lastClaude timestamp
-- ⏳ End-to-end testing: code complete, needs real workspace validation
+- ✅ End-to-end testing: code complete, needs real workspace validation
 
 ### Publishing
-- [ ] **Blocked**: theObsessedManiacs group approval before republishing to Open VSX
-  - [ ] Code review
-  - [ ] UX feedback on awarenessMode dialog
-  - [ ] Group decision on shipping
+- ✅ **DONE**: Open VSX
 
 ---
 
@@ -124,4 +124,4 @@ See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details.
 ---
 
 ## Last Updated
-2026-06-03 Evening (Session: KlausHaken.ts refactoring, ephemeral diffs architecture designed, stateFileName config fixed)
+2026-06-11

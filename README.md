@@ -196,4 +196,4 @@ This extension is part of the **"Wohlfühl-Config"** project — a comprehensive
 
 ---
 
-**Last Updated:** 2026-05-19 (Ephemeral context + GlobalSettings warning)
+**Last Updated:** 2026-06-11

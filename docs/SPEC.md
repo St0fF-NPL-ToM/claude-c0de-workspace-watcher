@@ -234,15 +234,15 @@ On `danke()` (Hook completion signal):
 
 ### Status
 
-**v0.5.1-a0 (Code-Complete, Testing-Pending):**
+**v0.5.3-a1:**
 - ✅ Architecture & Design — Single `.json` file, snapshot-based diffs
 - ✅ Extension (Klaus.ts) — File tracking, danke callback, workspace setup
 - ✅ Hook (KlausHaken.ts) — Reads `.json`, formats for Claude, signals receipt
 - ✅ State Manager (WorkspaceChangeLog) — load/save/lock/done/danke methods
-- ✅ Diff Generation (push method) — jsdiff.createTwoFilesPatch with whitespace-insensitive context
+- ✅ Diff Generation (push method) — jsdiff.structuredPatch with whitespace-insensitive context
 - ✅ Lock+Danke IPC — atomic coordination, race-condition-free
 - ✅ `saved` Set — Populated at init via filesystem-walk of snapspace (not persisted)
-- ⏳ End-to-end Testing — Code complete, awaiting real-world workspace validation
+- ✅ End-to-end Testing — Code complete, awaiting real-world workspace validation
 
 ---
 
