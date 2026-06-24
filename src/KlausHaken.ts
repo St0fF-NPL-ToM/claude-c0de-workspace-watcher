@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import { HookData } from './KlausDinge'
 
-const maxWaitMs = 5000
+const maxWaitMs = 30000
 
 class HookInput
 {

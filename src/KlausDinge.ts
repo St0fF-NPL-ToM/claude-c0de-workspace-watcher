@@ -43,6 +43,8 @@ export class WorkspaceChangeLog
             const snapFiles = fs.readdirSync( schnapps, { recursive: true } ) as string[]
             snapFiles.forEach( ( f ) => this.saved.add( path.relative( schnapps, f ) ) )
         } // So, erstmal was getrunken …
+        // Vielleicht noch ein fehlerhaftes übriges Danke-File löschen?
+        if ( fs.existsSync( fn + `.danke` ) ) fs.unlinkSync( fn + `.danke` )
         if ( fs.existsSync( fn ) ) {
             const data = fs.readFileSync( fn, 'utf-8' )
             const parsed = JSON.parse( data ) as HookData
@@ -98,7 +100,6 @@ export class WorkspaceChangeLog
          *  → der Hook wartet, solange das Danke-File existiert
          *  → err liest dann das info file und löscht es.
          */
-        this.lock( this.file ) // wir werden speichern! Atomare Operationen zuerst!
         const toSnapshot = [ ...this.files ]  // Kopie
         this.files = new Set()  // ← Sofort leeren, wird von diff "re-filled"
         this.diffs = []         // diffs sind ephemeral, werden jetzt erstellt
@@ -108,7 +109,8 @@ export class WorkspaceChangeLog
             diffs: this.diffs,
             files: Array.from( this.files )
         }, null, 2 ) )
-        if ( fs.existsSync( thk ) ) { fs.unlinkSync( thk ); Logger.debug( `🧹 Danke file cleaned up` ) }
+        fs.unlinkSync( thk ); Logger.debug( `🧹 Danke file cleaned up` )
+        // this basically saves the diffs of the current State in the state file, but ignores them completely!
         this.files = new Set()
         this.lastClaude = new Date().toISOString()  // ← Timestamp setzen
         this.save( this.file )
@@ -126,26 +128,31 @@ export class WorkspaceChangeLog
         let [ ws, ks ] = this.verzeichnisse()
         let snapName = path.join( ks, fn )
         let fileName = path.join( ws, fn )
-        // Read current file
-        const newContent = fs.readFileSync( fileName, 'utf-8' )
-        let hasSnap = fs.existsSync( snapName )
-        if ( hasSnap ) {
-            // Read old snapshot file
-            const oldContent = fs.readFileSync( snapName, 'utf-8' )
-            // Generate unified diff using jsdiff
-            const di = diff.structuredPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2, stripTrailingCr: true } )
-            Logger.trace( `∂ :${JSON.stringify( di )}` )
-            if ( di.hunks.length ) {                            // changes detected:
-                di.oldFileName = undefined
-                this.diffs.push( `==diff: '${fn}'==\n` + diff.formatPatch( di, diff.OMIT_HEADERS ) )       // → record change
-            } else this.files.add( fn )
-        } else this.files.add( fn )
-        if ( hasSnap ) fs.writeFile( snapName, newContent, 'utf-8', ( err ) => this.snapShot( err, fn ) )
-        else fs.mkdir( path.dirname( snapName ), { recursive: true }, ( err ) =>
-        {
-            if ( err ) Logger.error( `🚫 failed to create snapshot folder: ${err}, file: '${path.dirname( snapName )}'` )
-            else fs.writeFile( snapName, newContent, 'utf-8', ( err ) => this.snapShot( err, fn ) )
-        } )
+        let fEx = fs.existsSync( fileName )
+        let sEx = fs.existsSync( snapName )
+        if ( fEx ) {
+            const newContent = fs.readFileSync( fileName, 'utf-8' )    // Read current file
+            if ( sEx ) {
+                const oldContent = fs.readFileSync( snapName, 'utf-8' )   // Read old snapshot file
+                // Generate unified diff using jsdiff
+                const di = diff.structuredPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2, stripTrailingCr: true } )
+                if ( di.hunks.length ) {                            // changes detected:
+                    di.oldFileName = undefined
+                    this.diffs.push( `==diff: '${fn}'==\n` + diff.formatPatch( di, diff.OMIT_HEADERS ) )       // → record change
+                } else this.files.add( fn )
+                Logger.trace( `∂ '${fn}': ${JSON.stringify( di )}` )
+            } else Logger.trace( `📎 no diff, creating snapshot: '${fn}'` )
+            fs.mkdir( path.dirname( snapName ), { recursive: true }, ( err ) =>
+            {
+                if ( err ) Logger.error( `🚫 failed to create snapshot folder: ${err}, file: '${path.dirname( snapName )}'` )
+                else fs.writeFile( snapName, newContent, 'utf-8', ( err ) => this.snapShot( err, fn ) )
+            } )
+        } else {
+            this.files.add( fn )
+            Logger.trace( `🗑️ no diff, file deleted: '${fn}'` )
+            if ( sEx ) // file deleted - snapshot not needed anymore
+                fs.unlink( snapName, ( err ) => this.snapShot( err, fn ) )
+        }
     }
     public push( fn: string ): boolean
     {   /** push-refactoring:
