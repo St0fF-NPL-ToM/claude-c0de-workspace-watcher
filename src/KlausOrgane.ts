@@ -1,14 +1,17 @@
 import * as vscode from 'vscode'
-import * as path from 'path'
-import * as fs from 'fs'
+import * as path from 'node:path'
+import * as fs from 'node:fs'
 import { Context, Logger, parseJSON } from './KlausDinge'
 
-
+export enum Erkannt
+{
+    erstellt, modifiziert, entfernt
+}
 export class Augen
 {
     static a: vscode.FileSystemWatcher[] = []
 
-    public static auf( incl: string[], danke: string, fc_cb: ( f: string ) => void, d_cb: ( d: string ) => void ): number
+    public static auf( incl: string[], danke: string, fc_cb: ( f: string, a: Erkannt ) => void, d_cb: ( d: string, a: Erkannt ) => void ): number
     {
         Logger.debug( `🗹☐ OochnUff!` )
         // Falls schon Watcher existieren, werden sie vorher entfernt
@@ -35,13 +38,14 @@ export class Augen
         Augen.a.length = 0
         if ( !zwinkern ) Logger.debug( '🔇 alle Watcher gelöscht…' )
     }
-    public static neu( b: vscode.Uri, p: string, c: boolean, cb: ( x: string ) => void ): number
+    public static neu( b: vscode.Uri, p: string, onlyCreation: boolean, cb: ( x: string, a: Erkannt ) => void ): number
     {
-        const a = vscode.workspace.createFileSystemWatcher( new vscode.RelativePattern( b, p ), !c, c, c )
-        if ( c ) a.onDidCreate( ( uri ) => cb( uri.fsPath ) )
+        const a = vscode.workspace.createFileSystemWatcher( new vscode.RelativePattern( b, p ), !onlyCreation, onlyCreation, onlyCreation )
+        if ( onlyCreation ) a.onDidCreate( ( uri ) => cb( uri.fsPath, Erkannt.erstellt ) )
         else {
-            a.onDidChange( ( uri ) => cb( uri.fsPath ) )
-            a.onDidDelete( ( uri ) => cb( uri.fsPath ) )
+            a.onDidCreate( ( uri ) => cb( uri.fsPath, Erkannt.erstellt ) )
+            a.onDidChange( ( uri ) => cb( uri.fsPath, Erkannt.modifiziert ) )
+            a.onDidDelete( ( uri ) => cb( uri.fsPath, Erkannt.entfernt ) )
         }
         Augen.a.push( a )
         return Augen.a.length

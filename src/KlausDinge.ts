@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as diff from 'diff'
 import { ExtName, ConfigKey, CKey, Default } from "./KlausKonstanten.generated"
+import { Erkannt } from './KlausOrgane'
 
 // → Globalisierung von Parametern / Strings / Interfaces
 const SCOPE_ICONS: string[] = [ `🌐`, `🏭` ]    // sozusagen global vs. firma ... doofes Emoticon.
@@ -22,15 +23,17 @@ export interface HookData
     lastClaude: string
     files: string[]
     diffs: string[]
+    dels: string[]
 }
 // → unser Datenträger …
 export class WorkspaceChangeLog
 {   // internal state to save:
     lastClaude: string = new Date().toISOString()
     files: Set<string> = new Set()
-    saved: Set<string> = new Set()
-    // internal state / temporary data holders
     diffs: string[] = []
+    dels: Set<string> = new Set()
+    // internal state / temporary data holders
+    saved: Set<string> = new Set()
     file: string = ``
     flock: string = ``
     public load( fn: string ): string
@@ -50,7 +53,8 @@ export class WorkspaceChangeLog
             const parsed = JSON.parse( data ) as HookData
             this.lastClaude = parsed.lastClaude || new Date().toISOString()
             this.files = new Set( parsed.files || [] )
-            this.diffs = /*parsed.diffs ||*/[] // won't save diffs anymore!
+            this.diffs = parsed.diffs || []
+            this.dels = new Set( parsed.dels || [] )
             return `lastClaude=${this.lastClaude}, files=${this.files.size}, diffables=${this.saved.size}`
         } else
             return `file not found at ${fn} → state reset to "now".`
@@ -62,13 +66,18 @@ export class WorkspaceChangeLog
             this.file = fn
         }
         this.lock( fn )    // silent fail if already set.
-        fs.writeFileSync( fn, JSON.stringify( {
-            lastClaude: this.lastClaude,
-            diffs: [],
-            files: Array.from( this.files )
-        }, null, 2 ) )
+        this.write2( fn )
         if ( !noUnlock ) this.done()
         return `saved to ${fn}`
+    }
+    private write2( fn: string )
+    {
+        fs.writeFileSync( fn, JSON.stringify( {
+            lastClaude: this.lastClaude,
+            diffs: this.diffs,
+            files: Array.from( this.files ),
+            dels: Array.from( this.dels )
+        }, null, 2 ) )
     }
     public lock( fn: string )
     {
@@ -104,23 +113,22 @@ export class WorkspaceChangeLog
         this.files = new Set()  // ← Sofort leeren, wird von diff "re-filled"
         this.diffs = []         // diffs sind ephemeral, werden jetzt erstellt
         toSnapshot.forEach( ( fn ) => this.diff( fn ) )
-        fs.writeFileSync( this.file + `.info`, JSON.stringify( {
-            lastClaude: this.lastClaude,
-            diffs: this.diffs,
-            files: Array.from( this.files )
-        }, null, 2 ) )
-        fs.unlinkSync( thk ); Logger.debug( `🧹 Danke file cleaned up` )
+        this.write2( this.file + `.info` )
+        fs.unlinkSync( thk ); Logger.log( `🧹 Danke file cleaned up after writing Hook-Infos.` )
         // this basically saves the diffs of the current State in the state file, but ignores them completely!
         this.files = new Set()
+        this.dels = new Set()
         this.lastClaude = new Date().toISOString()  // ← Timestamp setzen
-        this.save( this.file )
+        this.write2( this.file )
     }
     public snapShot( err: NodeJS.ErrnoException | null, fn: string ): void
     {
         if ( err ) Logger.error( `🚫 failed to update snapshot file: ${err}, file: '${fn}'` )
         else {
             Logger.debug( `📷 snapshot '${fn}' updated…` )
-            this.saved.add( fn )
+            let sp = path.join( path.dirname( this.file ), path.basename( this.file, `.json` ), fn )
+            if ( fs.existsSync( sp ) ) this.saved.add( fn )
+            else this.saved.delete( fn )
         }
     }
     private diff( fn: string )
@@ -141,61 +149,35 @@ export class WorkspaceChangeLog
                     this.diffs.push( `==diff: '${fn}'==\n` + diff.formatPatch( di, diff.OMIT_HEADERS ) )       // → record change
                 } else this.files.add( fn )
                 Logger.trace( `∂ '${fn}': ${JSON.stringify( di )}` )
-            } else Logger.trace( `📎 no diff, creating snapshot: '${fn}'` )
+            } else {
+                this.files.add( fn )
+                Logger.trace( `📎 no diff, creating snapshot: '${fn}'` )
+            }
             fs.mkdir( path.dirname( snapName ), { recursive: true }, ( err ) =>
             {
                 if ( err ) Logger.error( `🚫 failed to create snapshot folder: ${err}, file: '${path.dirname( snapName )}'` )
                 else fs.writeFile( snapName, newContent, 'utf-8', ( err ) => this.snapShot( err, fn ) )
             } )
         } else {
-            this.files.add( fn )
+            this.dels.add( fn )
             Logger.trace( `🗑️ no diff, file deleted: '${fn}'` )
             if ( sEx ) // file deleted - snapshot not needed anymore
                 fs.unlink( snapName, ( err ) => this.snapShot( err, fn ) )
         }
     }
-    public push( fn: string ): boolean
+    public push( fn: string, action: Erkannt ): boolean
     {   /** push-refactoring:
          *  → nur noch Dateien in das Set "pushen"
          *  → diffs erst bei Anforderung bestimmen
          */
-        if ( !this.files.has( fn ) ) {
-            this.files.add( fn )    // Eine Änderung, nur die Ungenaue.
-            return true
-        } else return false
-        /** Wie machen wir das hier genau?  Sehr einfach.
-         *  - wir haben den Workspace-relative file path als fn.
-         *  - wir brauchen ein Diff zum letzten gespeicherten Zustand.
-         *  → Ist die betreffende Datei schon in "files" aufgeführt?
-         *      ( würde bedeuten: Snapshot lag bei erster Änderung nicht vor )
-         *    ✔ keine Änderung
-         *    ✘ gibt es einen Snapshot der Datei ?
-         *      ✘ füge Datei zu "files" hinzu, speichere keinen Snapshot
-         *      ✔ → beschaffe Diff
-         *        → speichere aktuellen Stand als Snapshot
-         *        → falls Diff leer ist: keinen Eintrag erstellen.
-         */
-        if ( !this.files.has( fn ) ) {
-            let [ ws, ks ] = this.verzeichnisse()
-            let snapName = path.join( ks, fn )
-            if ( fs.existsSync( snapName ) ) {
-                let fileName = path.join( ws, fn )
-                // Read old snapshot file
-                const oldContent = fs.readFileSync( snapName, 'utf-8' )
-                // Read current file
-                const newContent = fs.readFileSync( fileName, 'utf-8' )
-                // Generate unified diff using jsdiff
-                const di = diff.structuredPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2, stripTrailingCr: true } )
-                Logger.debug( `∂ :${JSON.stringify( di )}` )
-                if ( di.hunks.length ) {                            // changes detected:
-                    di.oldFileName = undefined
-                    this.diffs.push( `==diff: '${fn}'==\n` + diff.formatPatch( di, diff.OMIT_HEADERS ) )       // → record change
-                    fs.writeFile( snapName, newContent, 'utf-8',    // → update snapshot
-                        ( err ) => { if ( err ) Logger.error( `🚫 failed to update snapshot: ${err}, file: '${snapName}'` ) } )
-                    return true                                 // → tell upstream about a real change
-                }
-            } else {
+        if ( ( Erkannt.modifiziert === action ) || ( action === Erkannt.erstellt ) ) {
+            if ( !this.files.has( fn ) ) {
                 this.files.add( fn )    // Eine Änderung, nur die Ungenaue.
+                return true
+            }
+        } else if ( action === Erkannt.entfernt ) {
+            if ( !this.dels.has( fn ) ) {
+                this.dels.add( fn )
                 return true
             }
         }

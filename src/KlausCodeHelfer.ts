@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import * as fs from 'fs'
+import * as fs from 'node:fs'
 import { CKey, ConfigKey } from "./KlausKonstanten.generated"
 import { K } from "./Klaus"
 import { Context, Logger, parseJSON, StateKey } from './KlausDinge'
@@ -14,20 +14,20 @@ export function activate( context: vscode.ExtensionContext )
     handleUpgrade()
     vscode.workspace.onDidChangeWorkspaceFolders( ( e ) =>
     {
-        Logger.debug( `🔄 event: ${JSON.stringify( e )} → begin handling…` )
+        Logger.debug( `🔄 event: WorkspaceChanged → begin handling ( ${e.added.length} additions, ${e.removed.length} removals ) …` )
         K.workspaceChanged()
         Logger.log( `🔁 Workspace-Folder-Change-Ereignis bearbeitet…` )
     } )
     vscode.workspace.onDidChangeConfiguration( ( e ) =>
     {
-        Logger.debug( `🔄 event: ${JSON.stringify( e )} → begin handling…` )
+        Logger.debug( `🔄 event: ConfigurationChange → begin handling…` )
         let log: string[] = []
         if ( e.affectsConfiguration( ConfigKey.EXCL ) ) { const l = K.exclChanged(); if ( l ) log.push( l ) }
         if ( e.affectsConfiguration( ConfigKey.INCL ) ) { const l = K.inclChanged(); if ( l ) log.push( l ) }
         if ( e.affectsConfiguration( ConfigKey.FILE ) ) { const l = K.fileChanged(); if ( l ) log.push( l ) }
         if ( e.affectsConfiguration( ConfigKey.MODE ) ) { const l = K.modeChanged(); if ( l ) log.push( l ) }
         if ( log ) log.forEach( txt => Logger.log( `🔁 ${txt}…` ) )
-        else Logger.debug( `… event: ${JSON.stringify( e )} → no changes. 🔄` )
+        else Logger.debug( `… event: ConfigurationChange → no changes. 🔄` )
     } )
     context.subscriptions.push(
         vscode.commands.registerCommand( Context.extName() + '.openSettings',

@@ -1,9 +1,8 @@
 import * as vscode from 'vscode'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import * as diff from 'diff'
 import { CKey, ConfigKey, Default, ExtName } from "./KlausKonstanten.generated"
-import { Augen, Hand } from './KlausOrgane'
+import { Erkannt, Augen, Hand } from './KlausOrgane'
 import { Context, HookData, Logger, modeIcon, parseJSON, scopeIcon, StateKey, WorkspaceChangeLog } from "./KlausDinge"
 
 // → das ist Klaus!
@@ -135,7 +134,7 @@ export class K
         neu.forEach( i => { if ( !K.incl.find( s => s === i ) ) anders = true } )
         if ( anders ) {
             K.incl = neu
-            if ( K.mode !== 'none' ) Augen.auf( neu, K.file + `.danke`, ( f => K.dateiAnders( f ) ), ( d => K.dankeSchoen( d ) ) )
+            if ( K.mode !== 'none' ) Augen.auf( neu, K.file + `.danke`, ( ( f, a ) => K.dateiAnders( f, a ) ), ( ( d, a ) => K.dankeSchoen( d, a ) ) )
             return `🗂️ Klaus schaut nun anders hin…`
         }
     }
@@ -191,7 +190,7 @@ export class K
         if ( isActive ) {
             futter = K.laden()
             finger = Hand.dran( K.workspace, K.file! )
-            glotzn = Augen.auf( K.incl, K.file + `.danke`, ( f => K.dateiAnders( f ) ), ( d => K.dankeSchoen( d ) ) )
+            glotzn = Augen.auf( K.incl, K.file + `.danke`, ( ( f, a ) => K.dateiAnders( f, a ) ), ( ( d, a ) => K.dankeSchoen( d, a ) ) )
         } else {    // Wenn der Nutzer kein Feedback für Klaus wünscht, sollte auch
             K.log = new WorkspaceChangeLog() // "altes Feedback" entfernt werden!
             K.sichern()
@@ -207,18 +206,18 @@ export class K
             Logger.log( `😴 Klaus\'C0dehelfer träumt von 🌞` )
         }
     }
-    public static dateiAnders( f: string ): void
+    public static dateiAnders( f: string, a: Erkannt ): void
     {
         if ( K.willNicht( f ) ) Logger.debug( `🚫 Excluded: ${f}` )
         else {
             const relativePath = K.relPfad( f )
-            if ( K.log.push( relativePath ) ) {
+            if ( K.log.push( relativePath, a ) ) {
                 Logger.log( `✏️  [${new Date().toISOString()}] ${relativePath}` )
                 K.baldSichern()
             } else Logger.debug( `⏭️  Already tracked / no changes: ${relativePath}` )
         }
     }
-    public static dankeSchoen( f: string ): void
+    public static dankeSchoen( f: string, a: Erkannt ): void
     {
         Logger.log( `🙏 Danke received: hook waiting for data…` )
         K.log.danke( f )

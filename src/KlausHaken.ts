@@ -1,4 +1,4 @@
-import * as fs from 'fs'
+import * as fs from 'node:fs'
 import { HookData } from './KlausDinge'
 
 const maxWaitMs = 30000
@@ -39,12 +39,17 @@ class HookOutput
   constructor ( ac: HookData )
   {
     let context: string = ''
-    if ( ac.diffs.length )
-      context += `[EPHEMERAL: unified differential file changes since ${ac.lastClaude}:]\n${ac.diffs.join( '\n' )}\n---\n`
-    if ( ac.files.length )
-      context += `[EPHEMERAL: following workspace files have changed since ${ac.lastClaude} (no diff available):]\n${ac.files.join( '\n' )}\n---\n`
-    if ( context.length === 0 )
-      context = `[EPHEMERAL: no workspace files have changed since${ac.lastClaude}\n`
+    if ( ac.diffs.length === 0 && ac.files.length === 0 && ac.dels.length === 0 ) {
+      context = `[EPHEMERAL: no workspace files have changed since${ac.lastClaude}]`
+    } else {
+      context = `[EPHEMERAL: recorded file changes since ${ac.lastClaude}: ${ac.diffs.length} diffs, ${ac.files.length} non-diffable file changes, ${ac.dels.length} file deletions.]\n`
+      if ( ac.diffs.length )
+        context += `${ac.diffs.join( '\n' )}\n---\n`
+      if ( ac.files.length )
+        context += `changed file names (no diff available): [\n\t${ac.files.join( '\n\t' )}\n]` + ( ac.dels.length ? `,\n` : `` )
+      if ( ac.dels.length )
+        context += `removed file names: [\n\t${ac.dels.join( '\n\t' )}\n]`
+    }
     this.hookSpecificOutput = {
       hookEventName: 'UserPromptSubmit',  // ← Hardcoded hier
       additionalContext: context,
