@@ -25,10 +25,11 @@ export interface HookData
 }
 // → unser Datenträger …
 export class WorkspaceChangeLog
-{
+{   // internal state to save:
     lastClaude: string = new Date().toISOString()
     files: Set<string> = new Set()
     saved: Set<string> = new Set()
+    // internal state / temporary data holders
     diffs: string[] = []
     file: string = ``
     flock: string = ``
@@ -47,7 +48,7 @@ export class WorkspaceChangeLog
             const parsed = JSON.parse( data ) as HookData
             this.lastClaude = parsed.lastClaude || new Date().toISOString()
             this.files = new Set( parsed.files || [] )
-            this.diffs = parsed.diffs || []
+            this.diffs = /*parsed.diffs ||*/[] // won't save diffs anymore!
             return `lastClaude=${this.lastClaude}, files=${this.files.size}, diffables=${this.saved.size}`
         } else
             return `file not found at ${fn} → state reset to "now".`
@@ -61,7 +62,7 @@ export class WorkspaceChangeLog
         this.lock( fn )    // silent fail if already set.
         fs.writeFileSync( fn, JSON.stringify( {
             lastClaude: this.lastClaude,
-            diffs: this.diffs,
+            diffs: [],
             files: Array.from( this.files )
         }, null, 2 ) )
         if ( !noUnlock ) this.done()
@@ -90,38 +91,72 @@ export class WorkspaceChangeLog
         return [ ws, path.join( ks, path.basename( this.file, `.json` ) ) ]
     }
     public danke( thk: string )
-    {   /** Danke-Flow: ab jetzt auch logisch…
-         *  → lock setzen
-         *  → Aufgabenliste erstellen
-         *  → datafile und statefile aktualisieren (lock wird gelöst)
-         *  → Aufgaben abarbeiten (Dateien kopieren)
+    {   /** Danke-Flow-Refactoring: nun wird es ein Bitte-Flow!
+         *  → bitte-File anlegen
+         *  → Extension registriert "danke", erstellt diffs und schreibt .info-Datei
+         *  → zum Abschluss als "Signal zurück" wird das Danke-File gelöscht
+         *  → der Hook wartet, solange das Danke-File existiert
+         *  → err liest dann das info file und löscht es.
          */
         this.lock( this.file ) // wir werden speichern! Atomare Operationen zuerst!
         const toSnapshot = [ ...this.files ]  // Kopie
-        this.files = new Set()  // ← Sofort leeren!
-        this.lastClaude = new Date().toISOString()  // ← Timestamp setzen
-        this.diffs = [] // diffs sind ephemeral!
-        toSnapshot.forEach( ( fn ) => this.saved.add( fn ) )
+        this.files = new Set()  // ← Sofort leeren, wird von diff "re-filled"
+        this.diffs = []         // diffs sind ephemeral, werden jetzt erstellt
+        toSnapshot.forEach( ( fn ) => this.diff( fn ) )
+        fs.writeFileSync( this.file + `.info`, JSON.stringify( {
+            lastClaude: this.lastClaude,
+            diffs: this.diffs,
+            files: Array.from( this.files )
+        }, null, 2 ) )
         if ( fs.existsSync( thk ) ) { fs.unlinkSync( thk ); Logger.debug( `🧹 Danke file cleaned up` ) }
+        this.files = new Set()
+        this.lastClaude = new Date().toISOString()  // ← Timestamp setzen
         this.save( this.file )
-        let [ ws, ks ] = this.verzeichnisse()
-        // 2. LANGSAM: Snapshot-Loop (neue files können jetzt reingedrückt werden)
-        for ( const relFilePath of toSnapshot ) {
-            const snapPath = path.join( ks, relFilePath )
-            const sourcePath = path.join( ws, relFilePath )
-            try {
-                const content = fs.readFileSync( sourcePath, 'utf-8' )
-                fs.mkdirSync( path.dirname( snapPath ), { recursive: true } )
-                fs.writeFileSync( snapPath, content )
-            } catch ( err ) {
-                // Fehler? Datei gelöscht oder permission issue
-                this.saved.delete( relFilePath )
-                this.save( this.file ) // sofortiges Entfernen aus der eigentlich schon vorbereiteten Liste.
-            }
+    }
+    public snapShot( err: NodeJS.ErrnoException | null, fn: string ): void
+    {
+        if ( err ) Logger.error( `🚫 failed to update snapshot file: ${err}, file: '${fn}'` )
+        else {
+            Logger.debug( `📷 snapshot '${fn}' updated…` )
+            this.saved.add( fn )
         }
     }
+    private diff( fn: string )
+    {   // find out real file names
+        let [ ws, ks ] = this.verzeichnisse()
+        let snapName = path.join( ks, fn )
+        let fileName = path.join( ws, fn )
+        // Read current file
+        const newContent = fs.readFileSync( fileName, 'utf-8' )
+        let hasSnap = fs.existsSync( snapName )
+        if ( hasSnap ) {
+            // Read old snapshot file
+            const oldContent = fs.readFileSync( snapName, 'utf-8' )
+            // Generate unified diff using jsdiff
+            const di = diff.structuredPatch( fn, fn, oldContent, newContent, undefined, undefined, { ignoreWhitespace: true, context: 2, stripTrailingCr: true } )
+            Logger.trace( `∂ :${JSON.stringify( di )}` )
+            if ( di.hunks.length ) {                            // changes detected:
+                di.oldFileName = undefined
+                this.diffs.push( `==diff: '${fn}'==\n` + diff.formatPatch( di, diff.OMIT_HEADERS ) )       // → record change
+            } else this.files.add( fn )
+        } else this.files.add( fn )
+        if ( hasSnap ) fs.writeFile( snapName, newContent, 'utf-8', ( err ) => this.snapShot( err, fn ) )
+        else fs.mkdir( path.dirname( snapName ), { recursive: true }, ( err ) =>
+        {
+            if ( err ) Logger.error( `🚫 failed to create snapshot folder: ${err}, file: '${path.dirname( snapName )}'` )
+            else fs.writeFile( snapName, newContent, 'utf-8', ( err ) => this.snapShot( err, fn ) )
+        } )
+    }
     public push( fn: string ): boolean
-    {   /** Wie machen wir das hier genau?  Sehr einfach.
+    {   /** push-refactoring:
+         *  → nur noch Dateien in das Set "pushen"
+         *  → diffs erst bei Anforderung bestimmen
+         */
+        if ( !this.files.has( fn ) ) {
+            this.files.add( fn )    // Eine Änderung, nur die Ungenaue.
+            return true
+        } else return false
+        /** Wie machen wir das hier genau?  Sehr einfach.
          *  - wir haben den Workspace-relative file path als fn.
          *  - wir brauchen ein Diff zum letzten gespeicherten Zustand.
          *  → Ist die betreffende Datei schon in "files" aufgeführt?
@@ -208,6 +243,7 @@ export class Logger
     }
     static log( msg: string ): void { Logger.channel.info( msg ) }
     static debug( msg: string ): void { Logger.channel.debug( msg ) }
+    static trace( msg: string ): void { Logger.channel.trace( msg ) }
     static error( msg: string ): void { Logger.channel.error( msg ) }
     static dispose(): void { Logger.channel.dispose() }
 }

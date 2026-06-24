@@ -220,7 +220,7 @@ export class K
     }
     public static dankeSchoen( f: string ): void
     {
-        Logger.log( `🙏 Danke received: hook has read state…` )
+        Logger.log( `🙏 Danke received: hook waiting for data…` )
         K.log.danke( f )
     }
 }

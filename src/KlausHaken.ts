@@ -60,17 +60,20 @@ async function handleUserPromptSubmit(): Promise<void>
   // Parameter lesen
   const fn = process.argv[ 2 ]
   if ( fn ) {
-    const lockFilePath = `${fn}.lock` // `${hi.fn}.lock`
-    const thankYouPath = `${fn}.danke`// `${hi.fn}.danke`
+    const infoFilePath = `${fn}.info`     // added ".info" it's gonna be two files!
+    const pleaseFilePath = `${fn}.danke`  // no FN-change (why change all the other files, too?)
+    // say "please" to initiate reply sequence
+    fs.writeFileSync( pleaseFilePath, '' )
+    // wait at max 5s for "data production" (done when bitte-file got deleted.)
     const startTime = Date.now()
-    while ( fs.existsSync( lockFilePath ) ) {
-      if ( Date.now() - startTime > maxWaitMs ) process.exit( 0 )
+    while ( fs.existsSync( pleaseFilePath ) ) {
+      if ( Date.now() - startTime > maxWaitMs ) throw "info file not ready in time."
       await sleep( 50 )
     }
     // read data
-    const data = JSON.parse( fs.readFileSync( fn, 'utf-8' ) ) as HookData
-    // say "thank you"
-    fs.writeFileSync( thankYouPath, '' )
+    const data = JSON.parse( fs.readFileSync( infoFilePath, 'utf-8' ) ) as HookData
+    // remove temporary file
+    fs.unlinkSync( infoFilePath )
     // produce output
     console.log( JSON.stringify( new HookOutput( data ) ) )
   } else {
