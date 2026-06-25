@@ -1,4 +1,117 @@
-# v0.6.0 Implementation — COMPLETE & APPROVED FOR RELEASE
+<H1>0.6.0 Implementation PLAN</H1>
+
+- [Methode 3+](#methode-3)
+  - [Tackling the additional context size](#tackling-the-additional-context-size)
+  - [Tackling the signal to noise ratio](#tackling-the-signal-to-noise-ratio)
+    - [wording, content, order, informational flow of additional context](#wording-content-order-informational-flow-of-additional-context)
+      - [wording](#wording)
+      - [content and order](#content-and-order)
+      - [informational flow](#informational-flow)
+- [Methode 3](#methode-3-1)
+- [Architecture: Single-File System with Snapshots](#architecture-single-file-system-with-snapshots)
+  - [File Structure](#file-structure)
+  - [Separation of Concerns](#separation-of-concerns)
+  - [Design Advantages](#design-advantages)
+- [Architecture Details (Methode 3 — Real Implementation)](#architecture-details-methode-3--real-implementation)
+  - [WorkspaceChangeLog: State Manager + Diff Coordinator](#workspacechangelog-state-manager--diff-coordinator)
+- [Implementation Status (Stefan's Klaus.ts + KlausHaken.ts Complete, KlausDinge.ts)](#implementation-status-stefans-klausts--klaushakents-complete-klausdingets)
+  - [✅ WorkspaceChangeLog Core Features (Stefan Implemented)](#-workspacechangelog-core-features-stefan-implemented)
+- [Status Summary (Methode 3 — Implementation Phase)](#status-summary-methode-3--implementation-phase)
+- [Key Design Principles: Methode 3 Realized](#key-design-principles-methode-3-realized)
+- [Testing Results **v0.5.3-a0 (v0.6.0 Code-Complete)**:](#testing-results-v053-a0-v060-code-complete)
+
+## Methode 3+
+After working with Klaus on another project for ~2 weeks with those ephemeral diffs of `Methode 3` enabled, a few more insights came up.
+
+Obviously, it very much depends on the type of cowork the user does:
+- long turns of self-working (like 2+ hours), then sending a prompt:
+  - diffs are way too long
+  - additional context is persisted to a file by the claude code framework
+  - Klaus needs to be hinted to use this information (although he doesn't know, he can simply read the persisted file)
+  - It is way too much noise for Klaus, instead of being helpful - which kind of destroys the coworking-idea.
+- short progressions, solving small steps "together":
+  - Klaus knows exactly what was done
+  - beware of his pattern matching!  He will not notice when his training data matches a pattern you deem wrong and get confused if you solve problems differently without explanation.
+  - Klaus is made to try to sprint-solve problems as soon as he matched some patterns. So even there, and even if it is noted within CLAUDE.md, Klaus will want to edit files.  He needs to be remembered this is supposed to be coworking many times.
+
+So, the main insight was about the amount of ephemeral context.  How much is good, when does it become too much?  Also, tweaking the wording of the additional context seemed to help on the way.
+- it seems like anything more than ~4k will get persisted to a file
+- signal to noise ratio needs improvement
+
+### Tackling the additional context size
+So, cumulated diffs add up to become too large.  The diffing strategy obviously was bad - but what was bad about it?
+
+The `Methode 3` implementation tried to conserve the editing order of the user by diffing at every file change notification.\
+This approach - while being the obvious choice for planned `continuous mode` - produces too much data for Klaus to cope with at once.
+
+The solution is simple, yet effective: invert the order of operation of the hook, make the extension generate data `onDemand` - as the mode name already says.\
+**in-depth: the hook functionality**
+- Prompt is being sent, hook gets run
+- Hook "touches" `DankeFile` to demand data
+- Hook waits for at max 30s for the `DankeFile` to get erased\
+  (previous implementation's "waiting for `LockFile` to be removed" → simply replaced filename…)
+- Hook reads `InfoFile` and transforms the content into `additionalContext`
+- Hook erases `InfoFile` (non-checked signal `Thank you!`, prepares next round)
+- Hook ouputs `additionalContext`, by that injecting it to Klaus
+
+**in-depth: the extension**
+- FileSystemWatcher for danke-file: provides the "demand"-signal
+- `onDemand`:
+  - take the current "changed files" list, for each of them:
+    - check, if it is "diffable" (base snapshot exists, file exists)\
+      ☑ produce diff → add to info\
+      ☒ add file name to info.files list
+    - enqueue snapshot operation
+  - copy the current "erased"-list to info.dels list
+  - write `InfoFile` synchronously
+  - erase `DankeFile`
+
+### Tackling the signal to noise ratio
+Now, changing the overall diff production strategy already massively reduces the size of the context.  Size reduction already is SNR-improvement.  Anyhow, there's even more to gain.
+
+#### wording, content, order, informational flow of additional context
+Previously, we simply formatted the additional context like:
+```
+[EPHEMERAL: the following file changes were recorded since ${lastTimeStamp}]
+--diff: ${relFilePath}--
+<diff content>
+---
+[EPHEMERAL: the following files have changed since ${lastTimeStamp} (no diff possible)]
+<relFilePath>
+<relFilePath>
+…
+```
+While structured, it's not very helpful as soon as that content doesn't fit a page anymore.
+
+##### wording
+`ephemeral` is a signal word from Claude's training - must be used!
+
+Other wording ideas are very welcome - I myself am not a native English speaker, but CLAUDE is built on an English language model.
+
+Optimize even the size of info-lines by reducing content to its bare minimum.
+
+##### content and order
+- Overview
+- Section "diffs"
+- Section "file changes"
+- Section "file deletions"
+
+##### informational flow
+By prepending an `overview section` Klaus sees in the first line, which amounts and types of additional information is given.
+
+This is twice helpful:
+- depending on the current prompt's content, Klaus can already categorize the importance of the given sections
+- knowing the amounts in advance helps Klaus effectively reach certain additional context items
+
+Thus, testing the `Overview`:
+```
+[EPHEMERAL: recorded file changes since ${ac.lastClaude}: ${ac.diffs.length} diffs, ${ac.files.length} non-diffable file changes, ${ac.dels.length} file deletions.]\n
+```
+Also, the file lists got indentation for easier line content recognition.
+
+---
+---
+
 ## Methode 3
 After realizing there is no safe API to query VSCode's internal file history (API access to history is on VSCode's backlog), Klaus and Stefan sought other ways to generate diffs.
 A few *assisted* ideas came to our minds:
@@ -33,8 +146,6 @@ A few *assisted* ideas came to our minds:
 - `push(relFile)` = generate diff against snapshot and add to content (not just tracking)
 - Future-proof: when VSCode integrates diff generation, implementation can evolve
 
----
-
 ## Architecture: Single-File System with Snapshots
 
 **User-Configurable STEM:** Default `KlausC0deHelferData`, can be customized via `stateFileName` setting
@@ -45,24 +156,14 @@ A few *assisted* ideas came to our minds:
 ${workspace_root}/.vscode/
   ├── STEM.json               ← STATE + CONTENT: WorkspaceChangeLog (files, saved, lastClaude, snapshots)
   ├── STEM.json.lock          ← LOCK: protects writes while generating diffs
-  ├── STEM.json.danke         ← SIGNAL: Hook says "I read the content"
+  ├── STEM.json.danke         ↔ SIGNAL: Hook(need_content)|extension(content_ready)
+  ├── STEM.json.info          → CONTENT: extension provides data
   └── STEM/                   ← Snapshots directory (per workspace, preserves file history)
 ```
 
 ### Separation of Concerns
-
-**STEM.json (Unified State + Content): HookData Format**
-- `lastClaude: string` — timestamp of last report to Claude
-- `files: Set<string>` — current workspace changes since last `danke()` (which couldn't be diffed due to lack of a snapshot)
-- `diffs: Array<string>` — recorded diffs since `lastClaude`
-- Extension (KlausDinge.ts::WorkspaceLog) reads and writes this
-- Hook (KlausHaken.ts) only reads after the lock is released (erased)
-- **Protected by STEM.json.lock** while Extension updates (prevents Hook from reading incomplete data)
-
-**Lock Semantics:**
-- **Extension holds lock** while: modifying the `STEM.json` file
-- **Hook waits** for lock to release, then reads consistent data
-- Ensures Hook never sees partial/inconsistent state
+- the Hook simply acts as an executable signaling mechanism.
+- the extension does "all the hard work".
 
 ### Design Advantages
 
@@ -108,7 +209,7 @@ export class WorkspaceChangeLog {
 
 ---
 
-## Implementation Status (Stefan's Klaus.ts + KlausHaken.ts Complete, KlausDinge.ts In Progress)
+## Implementation Status (Stefan's Klaus.ts + KlausHaken.ts Complete, KlausDinge.ts)
 
 ### ✅ WorkspaceChangeLog Core Features (Stefan Implemented)
 
@@ -180,7 +281,7 @@ public danke(fn: string, thk: string) {
 | **push() method** | ✅ DONE | Generates unified diffs using jsdiff.createTwoFilesPatch (KlausDinge.ts:122-158) |
 | **Diff formatting** | ✅ DONE | Unified diff with whitespace-insensitive context (context: 2) |
 | **Error handling** | ✅ DONE | Graceful handling — silent on file read errors, continues flow |
-| **End-to-end testing** | ⏳ READY | Code complete. Awaiting real-world test in workspace. |
+| **End-to-end testing** | ✅ DONE | 2 weeks working together on other projects. |
 
 ---
 
@@ -205,39 +306,22 @@ public danke(fn: string, thk: string) {
 
 ---
 
-## Ready for Testing
-
-**v0.5.1-a0 (v0.6.0 Code-Complete)** is ready for real-world validation:
+## Testing Results **v0.5.3-a0 (v0.6.0 Code-Complete)**:
 
 1. **End-to-end Testing:**
    - Make file change → trackFileChange() → push() generates diff
    - Prompt submitted → Hook reads `.data.json`
    - danke() updates snapshots
    - Verify diffs appear correctly in Claude context
+   - Verified by working with Klaus, that he is able to use the additional context injected
 
-2. **Future Optimizations (v0.7+):**
+2. **Optimizations:**
    - Filter whitespace-only diffs
-   - Handle large files (size threshold)
+   - Handle large files (size threshold) → insight: cumulated diffs may be better suited
    - Binary file detection
    - Multi-file diff presentation improvements
 
 ---
-
-## References
-
-- **Klaus.ts**: [../src/Klaus.ts](../src/Klaus.ts) — Extension entry point, file tracking, danke callback
-- **KlausHaken.ts**: [../src/KlausHaken.ts](../src/KlausHaken.ts) — Hook handler, reads `.data.json`, formats output
-- **KlausDinge.ts**: [../src/KlausDinge.ts](../src/KlausDinge.ts) — WorkspaceChangeLog, HookData, K, Context, Logger
-- **ROADMAP**: [../ROADMAP.md](../ROADMAP.md) — Project roadmap, v0.6.0 section
-- **Package.json**: Verify jsdiff dependency installed
-
-## Semantic Notes
-
-- **push(relFile)** = "generate diff and add to content" (not just "track file")
-- **danke(fn, thk)** = atomic state machine + snapshot I/O
-- **Hook** = read consistent data, format, output (no diff generation)
-- **Lock** = Extension protects writes, Hook respects lock
-
----
-
-**Last Updated:** 2026-06-02 (Implementation phase — Stefan wrote Klaus.ts + KlausHaken.ts, Klaus rewrote plan)
+**file revision history**
+- 2026-06-02 (Implementation phase — Stefan wrote Klaus.ts + KlausHaken.ts, Klaus rewrote plan)
+- 2026-06-25 Method 3+ - more insights, more "make that content better Klausible"

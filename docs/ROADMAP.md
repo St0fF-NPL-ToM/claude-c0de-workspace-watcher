@@ -83,20 +83,21 @@
 
 ---
 
-## ⏳ Pending / Future
+## 0.6.0: Ephemeral Diffs (Elegant Approach)
 
-### v0.6.0: Ephemeral Diffs (Elegant Approach)
+**Status 2026-06-11:** ✅ Implementation complete. Awaiting real-world workspace testing. First results: very promising!
 
-**Status:** ✅ Implementation complete. Awaiting real-world workspace testing. First results: very promising!
-
-See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details.
+See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details and "insight progression"
 
 **What's Implemented:**
-- ✅ WorkspaceChangeLog.push() generates unified diffs via jsdiff
+- ✅ WorkspaceChangeLog now handles:
+  - file creations, modifications and deletions
+  - creates diffs "on demand"
+  - optimized routine: all long-during operations NOT affecting the info to create are executed asynchronously
 - ✅ Snapshot-based system: files tracked → snapshots saved → diffs on next change
-- ✅ Lock+Danke IPC: atomic state transitions, safe diff coordination
-- ✅ HookData format: diffs[], files[], lastClaude timestamp
-- ✅ End-to-end testing: code complete, needs real workspace validation
+- ✅ Danke IPC: atomic state transitions, safe diff coordination
+- ✅ HookData format: diffs[], files[], dels[], lastClaude timestamp
+- ✅ End-to-end testing: code complete, needs further real-life validation
 
 ### Publishing
 - ✅ **DONE**: Open VSX
@@ -104,24 +105,20 @@ See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details.
 ---
 
 ## 🔗 Related Issues / Refs
-
-- `SPEC.md`: Future MultiDiff architecture (0.6.0)
-- `COLLABORATION.md`: Full development journey
+- `SPEC.md`: MultiDiff base architecture description for 0.6.0
+- `COLLABORATION.md`: Full development journey (until Klaus got too overwhelmed by the already realized complexity of this product → archived)
 - `SESSION_2025-05-15.md`: Session 2 notes (archived)
-- `../CLAUDE.md`: Project instructions for Claude Code
-
----
 
 ---
 
 ### Future: v0.7.0 & Beyond
-
-**v0.7.0 roadmap (post-v0.6.0):**
 - UX Enhancement: PostInstall Auto-Configuration
-- SPEC.md Implementation: Unified Diffs (if needed after real-world testing)
-- Optimizations based on v0.6.0 testing results
+- Hook-enhancement: improve wording further
+- Mode `continuous`
+  - the results of "cumulated diffs" in Versions 0.5.3 showed exactly why this mode will be needed: they add up quickly in size.
+  - if a way is found to easily "side-inject" a diff right when it can be created, this mode will be implemented asap.
 
 ---
 
 ## Last Updated
-2026-06-11
+2026-06-25
