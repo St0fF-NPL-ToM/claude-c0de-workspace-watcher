@@ -7,6 +7,8 @@ All notable changes to Klaus'C0dehelfer are documented here.
 ## [0.6.0] – onDemand Mode & File Deletion Tracking
 
 **Release Date:** 2026-06-25
+**Updates:**
+- 0.6.0-a22: 2026-07-23, depend-a-bot found a vulnerable dependency - updated all dependencies.
 
 ### Overview
 
