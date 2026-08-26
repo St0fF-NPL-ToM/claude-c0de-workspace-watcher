@@ -6,25 +6,84 @@ by `an Obsessed Maniac` – **We never rule…** but this time, we lead Claude t
 
 ---
 
+- [What It Does](#what-it-does)
+- [Features](#features)
+- [Installation](#installation)
+  - [From Open VSX Marketplace](#from-open-vsx-marketplace)
+  - [Download a package](#download-a-package)
+  - [Build from Source](#build-from-source)
+- [Configuration](#configuration)
+  - [Awareness Mode](#awareness-mode)
+  - [Include/Exclude Patterns](#includeexclude-patterns)
+  - [State Files and Folders](#state-files-and-folders)
+- [Architecture](#architecture)
+- [License](#license)
+- [Credits](#credits)
+
+---
+
 ## What It Does
 
 Klaus'C0dehelfer monitors your workspace for file changes and automatically injects them into Claude's context when you submit a prompt. Claude knows what you've changed without you saying a word.
 
 **The workflow:**
-1. You edit a file → Extension detects change
-2. You submit a prompt → Hook fires (`UserPromptSubmit`)
-3. Extension is notified via simplest RPC (file creation + filesystem watcher)
-4. Extension produces differential output, file change- and file deletion lists
-5. Extension ERASES hook-created file after writing the informational file
-6. Hook waits until either a time-out (CLAUDE CODE restrictions: at max 30s) happens, or the RPC-file is erased (signaling: an info-file was successfully written)
-7. Hook reads info file, formats it as a useable additional context for CLAUDE CODE
-8. Claude Code receives this ephemeral hint containing:
-   - A summary over the content of this hint
-   - consolidated diff's of all (diffable) file changes since the last prompt
-   - which workspace files have changed since the previous prompt's point in time.\
-     (not diffable because no previous base to compare to exists, yet)
-   - which workspace files were erased since…
-9. Hook erases info-file: signaling back successful reading.
+
+1. You edit a file
+2. Extension remembers change
+3. You submit a prompt
+4. Claude Code's Hook (`UserPromptSubmit`) activates the `KlausHaken.ts` ("hook")
+5. Extension is notified via simplest RPC (file creation + filesystem watcher)
+6. Extension produces differential output, file change- and file deletion lists
+7. Hook and ClaudeCode wait until either a time-out (CLAUDE CODE restrictions: at max 30s) happens, or the RPC-file is erased (signaling: an info-file was successfully written)
+8. Extension ERASES hook-created file after writing the informational file
+9. Hook-Actions:
+   - Hook reads info file, formats it as a useable additional context for CLAUDE CODE and finally injects:
+     - A summary over the content of this hint
+     - consolidated diff's of all (diffable) file changes since the last prompt
+     - which workspace files have changed since the previous prompt's point in time.\
+       (not diffable because no previous base to compare to exists, yet)
+     - which workspace files were erased since…
+   - Hook erases info-file: signaling back successful reading and "ready for next round"
+10. Extension cleans up and prepares for next prompt in the background
+11. Claude Code receives additional content and proceeds in processing the user prompt
+12. Claude Code returns results to the user's UI
+
+```mermaid
+---
+id: 1d6469e3-dc63-4680-b9fd-b0c9455bc159
+---
+sequenceDiagram
+    autonumber
+    participant User@{ "type" : "control" }
+    box Klaus'C0dehelfer
+        participant Klaus@{ "type" : "database" }
+        participant Haken@{ "type" : "queue" }
+    end
+    participant CC as ClaudeCode
+    activate User
+    User -->>+ Klaus: changes a file
+    Klaus ->- Klaus: remember file
+
+    User ->>+ CC: sends a prompt
+    deactivate User
+    CC ->>+ Haken: activates UserPromptSubmit Hook
+    Haken ->>+ Klaus: touch danke-file
+    par
+      Klaus -> Klaus: generate diffs<br>generate Prompt Data<br>write data file
+      CC -> CC: wait for hook submission<br>(max 30s)
+    end
+
+    Klaus ->> Haken: erase danke-file
+    par
+      Haken ->> CC: inject ephemeral content from data
+      deactivate Haken
+      Klaus ->- Klaus:- create new timestamp 'lastClaude'<br>- update diff-reference-files for changed files<br>- update & persist own state
+    end
+    CC -> CC: work user prompt incl. ephemeral content
+    CC ->>- User: Prompt Result
+    activate User
+    User ->- User: work with result …
+```
 
 ---
 
@@ -41,13 +100,22 @@ Klaus'C0dehelfer monitors your workspace for file changes and automatically inje
 
 ## Installation
 
-### From Open Marketplace (Easiest)
-Once published to Open VSX / VS Marketplace:
-1. VSCode Extensions (`Ctrl+Shift+X`)
-2. Search "Klaus'C0dehelfer"
-3. Click Install
+### From Open VSX Marketplace
+
+1. if not already done: install `OpenVSX Connect`
+2. open the OpenVSX-Connect-View
+   - command palette: `>View: Show OpenVSX Connect`
+3. Search "Klaus'C0dehelfer"
+4. Click Install
+
+### Download a package
+
+1. Visit the repository and check for [packages.](https://github.com/users/St0fF-NPL-ToM/packages?repo_name=claude-c0de-workspace-watcher)
+   - if for some reason I released a package, you may as well download it
+2. Open VSCode, use command palette: `>Extensions: Install from VSIX` to install the downloaded package.
 
 ### Build from Source
+
 ```bash
 git clone https://github.com/St0fF-NPL-ToM/claude-c0de-workspace-watcher
 cd claude-c0de-workspace-watcher
@@ -56,7 +124,8 @@ npm run bundle
 npx vsce package
 # Generates: claude-c0de-workspace-watcher-X.Y.Z-aB.vsix
 ```
-Install the generated `.vsix` via `Extensions → Install from VSIX…`
+
+Install the generated `.vsix` via `>Extensions → Install from VSIX…`
 
 ---
 
@@ -68,11 +137,12 @@ Klaus'C0dehelfer should be configured at the **workspace level** (`.vscode/setti
 
 If `Klaus'C0dehelfer` activates in a project where Klaus is also editing files, Klaus receives a hint with every prompt about which files *he* (Klaus) changed.  This creates confusion:
 
-*"Did the user change these files, or did I? What's happening here?"*
+❓ *"Did the user change these files, or did I? What's happening here?"* ❓
 
-The feature works best for collaborative coding (pair programming) where the user edits, and Claude: observes, analyzes, gives hints about best practices, and performs data and information acquisition tasks. Avoid enabling `Klaus'C0dehelfer` globally if you're also using Claude Code to write code himself in other projects.
+The feature works best for collaborative coding (pair programming) where the user edits, and Claude: observes, analyzes, gives hints about best practices, and performs data and information acquisition tasks.\
+Avoid enabling `Klaus'C0dehelfer` *globally* if you're also using Claude Code to write code himself in other projects.
 
-**Recommendation:** Use `workspace-level` configuration (`awarenessMode: onDemand` in `.vscode/settings.json`), change or append include and exclude filters as you need.
+✅ **Recommendation:** Use `workspace-level` configuration (`awarenessMode: onDemand` in `.vscode/settings.json`), change or append include and exclude filters as you need.
 
 *info:* include filters are applied first, at file system watcher creation level.  Exclude filters are applied after a file system watcher has fired.
 
@@ -88,6 +158,7 @@ Configure via one of these methods:
 First: better decide to use workspace / folder settings by clicking the respective settings tab.
 
 Then select one of:
+
 - **`none`** (default): No tracking, no hooks
 - **`onDemand`**: Hook fires on every Claude prompt (efficient, no noise) ✅
 - **`realTime`**: Hook fires on every file save (immediate, token-heavy) — *coming maybe* (waiting to validate agentic use case)
@@ -99,6 +170,8 @@ Example `.vscode/settings.json`:
   "claude-workspace-monitor.stateFileName": "KlausC0deHelferData"
 }
 ```
+
+---
 
 ### Include/Exclude Patterns
 
@@ -127,7 +200,7 @@ Example `.vscode/settings.json`:
 
 ---
 
-## State Files and Folders
+### State Files and Folders
 
 Klaus stores workspace state in `.vscode/KlausC0deHelferData.json`. Don't like the filename? Go ahead, customize it via `stateFileName` config — we don't care. The file extension and all Klaus internals? Those are none of your business. 😎
 
@@ -165,4 +238,4 @@ This extension is part of the **"Wohlfühl-Config"** project — a comprehensive
 
 ---
 
-**Last Updated:** 2026-06-25
+**Last Updated:** 2026-08-25

@@ -1,5 +1,7 @@
 # Klaus'C0dehelfer — MultiDiff Specification
 
+This file has historically grown, so information stated from earlier states of the extension may not hold any longer.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -232,8 +234,6 @@ On `danke()` (Hook completion signal):
 6. Save snapshots to disk
 7. Release lock
 
-### Status
-
 **v0.5.3-a1:**
 - ✅ Architecture & Design — Single `.json` file, snapshot-based diffs
 - ✅ Extension (Klaus.ts) — File tracking, danke callback, workspace setup
@@ -243,6 +243,19 @@ On `danke()` (Hook completion signal):
 - ✅ Lock+Danke IPC — atomic coordination, race-condition-free
 - ✅ `saved` Set — Populated at init via filesystem-walk of snapspace (not persisted)
 - ✅ End-to-end Testing — Code complete, awaiting real-world workspace validation
+
+---
+
+## 0.6.0-alpha phase
+
+- released 2026-06-25, date: 2026-08-26
+- no issues, nor reviews
+- obviously if it works, it works
+- updated lots of docs, as that wasn't Klaus "Leibgericht" …
+
+→ decision:\
+✅ leave `Alpha`-phase, enter `Beta`-phase.\
+✅ 2 months due `Release`-phase.
 
 ---
 

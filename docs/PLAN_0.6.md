@@ -12,13 +12,13 @@
   - [File Structure](#file-structure)
   - [Separation of Concerns](#separation-of-concerns)
   - [Design Advantages](#design-advantages)
-- [Architecture Details (Methode 3 — Real Implementation)](#architecture-details-methode-3--real-implementation)
+- [Architecture Details (Methode 3+ — Real Implementation)](#architecture-details-methode-3--real-implementation)
   - [WorkspaceChangeLog: State Manager + Diff Coordinator](#workspacechangelog-state-manager--diff-coordinator)
-- [Implementation Status (Stefan's Klaus.ts + KlausHaken.ts Complete, KlausDinge.ts)](#implementation-status-stefans-klausts--klaushakents-complete-klausdingets)
-  - [✅ WorkspaceChangeLog Core Features (Stefan Implemented)](#-workspacechangelog-core-features-stefan-implemented)
-- [Status Summary (Methode 3 — Implementation Phase)](#status-summary-methode-3--implementation-phase)
-- [Key Design Principles: Methode 3 Realized](#key-design-principles-methode-3-realized)
-- [Testing Results **v0.5.3-a0 (v0.6.0 Code-Complete)**:](#testing-results-v053-a0-v060-code-complete)
+- [Implementation Status](#implementation-status)
+  - [✅ WorkspaceChangeLog](#-workspacechangelog)
+- [Status Summary](#status-summary)
+- [Key Design Principles: Methode 3+ Realized](#key-design-principles-methode-3-realized)
+- [Testing Results **v0.6.0-a23 (v0.6.0 Alpha-Releases)**](#testing-results-v060-a23-v060-alpha-releases)
 
 ## Methode 3+
 After working with Klaus on another project for ~2 weeks with those ephemeral diffs of `Methode 3` enabled, a few more insights came up.
@@ -175,100 +175,101 @@ ${workspace_root}/.vscode/
 
 ---
 
-## Architecture Details (Methode 3 — Real Implementation)
+## Architecture Details (Methode 3+ — Real Implementation)
 
 ### WorkspaceChangeLog: State Manager + Diff Coordinator
 
 WorkspaceChangeLog owns **state management, diff generation, and snapshot lifecycle:**
 
 ```typescript
-export class WorkspaceChangeLog {
-  // STATE (persisted to STEM.json)
-  lastClaude: string                // Timestamp of last Claude report
-  files: Set<string>                // Files changed since last danke()
-  saved: Set<string>                // Files with snapshots (have diffs)
-  flock: string                     // Lock file path (internal tracking)
-
-  // METHODS
-  load(fn: string): string          // Load state from .data.json
-  save(fn: string, noUnlock?: boolean): string    // Persist state (optionally keep lock)
-  lock(fn: string): void            // Acquire lock (silent if already locked)
-  done(): void                      // Release lock
-
-  push(relFilePath: string): boolean
-    // File changed → generate diff (if snapshot exists) and add to Hook's content
-    // Returns: true if newly added, false if already tracked
-
-  danke(fn: string, thankYouPath: string): void
-    // Atomic state machine: lock → merge files into saved → clear files →
-    // save state → snapshot loop (unlocked) → release lock
+// → unser Informationsträger für Klaus
+export interface HookData
+{
+    lastClaude: string
+    files: string[]
+    diffs: string[]
+    dels: string[]
+}
+// → unser Datenträger …
+export class WorkspaceChangeLog
+{   // internal state to save:
+    lastClaude: string = new Date().toISOString()     // Timestamp of last Claude report
+    files: Set<string> = new Set()                   // Files changed since last danke()
+    diffs: string[] = []                            // diffable files since last danke()
+    dels: Set<string> = new Set()                  // set of deleted files
+    // internal state / temporary data holders
+    saved: Set<string> = new Set()               // files we can diff / snapshot available
+    file: string = ``                           // internal …
+    flock: string = ``
+[…]
 }
 ```
 
-**Key semantic:** `push(relFile)` doesn't just track — it **generates diff and prepares for Hook injection**.
-
 ---
 
-## Implementation Status (Stefan's Klaus.ts + KlausHaken.ts Complete, KlausDinge.ts)
+## Implementation Status
 
-### ✅ WorkspaceChangeLog Core Features (Stefan Implemented)
+### ✅ WorkspaceChangeLog
 
 **Data Structure:** `files` and `saved` as `Set<string>` — perfect for this use case
+
 - `lastClaude: string` — timestamp of last Claude report
 - `files: Set<string>` — files that changed since last `danke()`
+- `dels: Set<string>` — files that were deleted since last `danke()`
 - `saved: Set<string>` — files with snapshots (can generate diffs against these)
-- `flock: string` — internal: path to lock file
 
 **Lock Management:** Prevents concurrent writes
+
 - `lock(fn)` — acquires lock (idempotent, silent if already locked)
 - `done()` — releases lock
 - `save(fn, noUnlock?)` — persists state, optionally keeps lock held
 
 **Load/Save:** Correct Set ↔ Array JSON serialization
+
 - `load(fn)` — reads `.data.json`, converts arrays to Sets
 - `save(fn)` — converts Sets to arrays, writes `.data.json`
+- `write2( fn: string )` — finalizes a JSON write-out, persisting to disk
 
-**`danke(fn, thankYouPath)` Method:** State-Machine Transition
-```typescript
-public danke(fn: string, thk: string) {
-  this.lock(fn)                                    // 1. ATOMIC: acquire lock
-  const toSnapshot = [...this.files]              // 2. ATOMIC: copy files to snapshot
-  this.files = new Set()                          // 3. ATOMIC: clear files (ready for new changes)
-  this.lastClaude = new Date().toISOString()      // 4. ATOMIC: timestamp update
-  toSnapshot.forEach((fn) => this.saved.add(fn))  // 5. ATOMIC: merge into saved (can now diff)
-  this.save(fn, true)                             // 6. ATOMIC: persist (lock still held)
+**Final IPC-Pattern:**
+```mermaid
+---
+id: 1d6469e3-dc63-4680-b9fd-b0c9455bc159
+---
+sequenceDiagram
+    autonumber
+    participant User@{ "type" : "control" }
+    box Klaus'C0dehelfer
+        participant Klaus@{ "type" : "database" }
+        participant Haken@{ "type" : "queue" }
+    end
+    participant CC as ClaudeCode
+    activate User
+    User ->>+ Klaus: changes a file
+    Klaus ->- Klaus: remember file
 
-  // 7. SLOW: save snapshots (lock held, but new changes can queue)
-  for (const relFilePath of toSnapshot) {
-    const oldPath = path.join(K.klausSpace, relFilePath)
-    const newPath = path.join(K.workspace, relFilePath)
-    try {
-      const content = fs.readFileSync(newPath, 'utf-8')
-      fs.mkdirSync(path.dirname(oldPath), { recursive: true })
-      fs.writeFileSync(oldPath, content)
-      this.saved.add(relFilePath)  // Confirm snapshot saved
-    } catch (err) {
-      // Ignore: file deleted, permission issue, etc.
-    }
-  }
-  // 8. Finally: release lock (caller does this)
-  this.save(fn)  // Final persist + unlock
-}
+    User -->>+ CC: sends a prompt
+    deactivate User
+    CC ->>+ Haken: activates UserPromptSubmit Hook
+    Haken --x+ Klaus: touch danke-file
+    par Klaus to Klaus
+      Klaus -> Klaus: generate diffs<br>generate Prompt Data<br>write data file
+    and CC to CC
+      CC -> CC: wait for hook submission<br>(max 30s)
+    end
+
+    Klaus --x Haken: erase danke-file
+    Haken ->> CC: inject ephemeral content from data
+    deactivate Haken
+    Klaus ->- Klaus:- create new timestamp 'lastClaude'<br>- update diff-reference-files for changed files<br>- update & persist own state
+    CC -> CC: work user prompt incl. ephemeral content
+    CC ->>- User: Prompt Result
+    activate User
+    User ->- User: understand result …
 ```
 
-**Design Pattern:** Atomic state transition (1-6) + long I/O (7) + release (8). New changes can arrive during snapshot I/O!
-
-**K Class Integration:**
-- `K.workspace: string` — workspace root (set in `handleWorkspaceChange()`)
-- `K.klausSpace: string` — snapshot directory base (`.vscode/FILEBASENAME`)
-- `K.loadState()` → `K.log.load(K.file)`
-- `K.saveState()` → `K.log.save(K.file)`
-
 ---
 
----
-
-## Status Summary (Methode 3 — Implementation Phase)
+## Status Summary
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -278,27 +279,29 @@ public danke(fn: string, thk: string) {
 | **KlausDinge.ts Core** | ✅ DONE | WorkspaceChangeLog, load/save/lock/done/danke |
 | **HookData Interface** | ✅ DONE | `{ lastClaude, diffs[], files[] }` |
 | **Diff dependency** | ✅ DONE | jsdiff added to package.json |
-| **push() method** | ✅ DONE | Generates unified diffs using jsdiff.createTwoFilesPatch (KlausDinge.ts:122-158) |
+| **push() method** | ✅ DONE | Generates unified diffs using jsdiff.createTwoFilesPatch |
 | **Diff formatting** | ✅ DONE | Unified diff with whitespace-insensitive context (context: 2) |
 | **Error handling** | ✅ DONE | Graceful handling — silent on file read errors, continues flow |
 | **End-to-end testing** | ✅ DONE | 2 weeks working together on other projects. |
+| **push() method** | ☒ REVOKED | fixed by changing it to only push a filename into a set. |
 
 ---
 
-## Key Design Principles: Methode 3 Realized
+## Key Design Principles: Methode 3+ Realized
 
 | Aspect | Implementation |
 |--------|-----------------|
-| **Diff Generation** | Extension (`push()` method) generates on file change |
+| **Diff Generation** | Extension generates on prompt submit |
 | **Hook Complexity** | Minimal: read → format → output (3 steps) |
-| **File Format** | Single `.data.json` with state + content |
-| **Lock Semantics** | Extension holds lock while updating diffs/snapshots → Hook waits → reads atomically |
+| **File Formats** | Simple JSON files containing what is actually needed |
+| **Lock Semantics** | Extension holds lock while updating its internal state |
 | **State Machine** | `danke()` is atomic transition: merge → clear → timestamp → snapshot |
 | **Extensibility** | HookData.diffs and HookData.files can grow to HookData.warnings, etc. |
 | **Real-Time Feel** | Diffs generated as user types (via trackFileChange) |
 | **Minimal Hook** | No diff logic in Hook — just deserialize, format, send |
 
 **Why this works:**
+
 - Extension owns snapshots → can generate diffs efficiently
 - Lock coordination is simple: Extension holds, Hook waits
 - Atomic state transition + long I/O is safe (new changes can queue)
@@ -306,18 +309,31 @@ public danke(fn: string, thk: string) {
 
 ---
 
-## Testing Results **v0.5.3-a0 (v0.6.0 Code-Complete)**:
+## Testing Results **v0.6.0-a23 (v0.6.0 Alpha-Releases)**
 
-1. **End-to-end Testing:**
+1. **End User Experiences:**
+   - nearly 2k downloads within a month
+   - no issues reported
+   - no Reviews or ratings at all
+
+I must say, I don't know how to correctly interpret this situation.  I feel it could mean multiple things:
+
+- people not understanding what it does, do not bother after trying it out?
+- people for whom it runs perfectly do not have any urge to report anything?
+- nobody really uses it?
+
+Anyhow. After about 1 month of "field experience" without negative feedback, no more bugs found on my side: it should be time to bump into BETA stage!
+
+2. **End-to-end Testing:**
    - Make file change → trackFileChange() → push() generates diff
    - Prompt submitted → Hook reads `.data.json`
    - danke() updates snapshots
    - Verify diffs appear correctly in Claude context
    - Verified by working with Klaus, that he is able to use the additional context injected
 
-2. **Optimizations:**
+3. **Optimizations:**
    - Filter whitespace-only diffs
-   - Handle large files (size threshold) → insight: cumulated diffs may be better suited
+   - Handle large files (size threshold)
    - Binary file detection
    - Multi-file diff presentation improvements
 
@@ -325,3 +341,4 @@ public danke(fn: string, thk: string) {
 **file revision history**
 - 2026-06-02 (Implementation phase — Stefan wrote Klaus.ts + KlausHaken.ts, Klaus rewrote plan)
 - 2026-06-25 Method 3+ - more insights, more "make that content better Klausible"
+- 2026-08-26 Updated file, added IPC-Mechanism diagram

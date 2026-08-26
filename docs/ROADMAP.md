@@ -81,26 +81,30 @@
 
 **Version:** 0.5.x → 0.5.3 (0.6-feature-complete, more-and-more-testing-pending)
 
----
+### Phase 11: Ephemeral Diffs (Elegant Approach)
 
-## 0.6.0: Ephemeral Diffs (Elegant Approach)
-
-**Status 2026-06-11:** ✅ Implementation complete. Awaiting real-world workspace testing. First results: very promising!
-
-See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details and "insight progression"
-
-**What's Implemented:**
-- ✅ WorkspaceChangeLog now handles:
+- [x] **Status 2026-06-11:** Implementation complete. Awaiting real-world workspace testing. First results: very promising!
+  - See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details and "insight progression"
+- [x] WorkspaceChangeLog now handles:
   - file creations, modifications and deletions
   - creates diffs "on demand"
   - optimized routine: all long-during operations NOT affecting the info to create are executed asynchronously
-- ✅ Snapshot-based system: files tracked → snapshots saved → diffs on next change
-- ✅ Danke IPC: atomic state transitions, safe diff coordination
-- ✅ HookData format: diffs[], files[], dels[], lastClaude timestamp
-- ✅ End-to-end testing: code complete, needs further real-life validation
+- [x] Snapshot-based system: files tracked → snapshots saved → diffs on next change
+- [x] Danke IPC: atomic state transitions, safe diff coordination
+- [x] HookData format: diffs[], files[], dels[], lastClaude timestamp
+- [x] End-to-end testing: code complete, needs further real-life validation
+- [x] Version bumped to 0.6, latest bugfix release: 0.6.0-a23
+
+### Phase 12: no code changes - situation assessment
+
+- [x] download-count on Open VSX still rising (well > 1k now)
+- [x] neither issues, nor ratings or reviews
+- [x] on a personal note: no more need for the extension - claude cost more time than it saves in development.
+- [x] decision: leave Alpha-phase, enter beta phase.
+  - if for some reason no further user information comes in within 2 months and download counts still rise, we'll also leave beta phase without fixes or bumps.
 
 ### Publishing
-- ✅ **DONE**: Open VSX
+- [x] **DONE**: Open VSX
 
 ---
 
@@ -121,4 +125,4 @@ See [PLAN_0.6.md](PLAN_0.6.md) for complete architecture details and "insight pr
 ---
 
 ## Last Updated
-2026-06-25
+2026-08-26
